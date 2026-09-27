@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package eagle.dictionary.v1;
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/dictionary/v1;dictionaryv1";
+
+// ErrorReason identifies dictionary-module failures independently of transport status codes.
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_DICT_TYPE_NOT_FOUND = 30;
+  ERROR_REASON_DICT_TYPE_DUPLICATED = 31;
+  ERROR_REASON_DICT_DATA_NOT_FOUND = 32;
+  ERROR_REASON_DICT_DATA_DUPLICATED = 33;
+}

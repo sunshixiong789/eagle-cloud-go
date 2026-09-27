@@ -1,0 +1,34 @@
+# Envoy Gateway v1.9.x Helm values。控制面和数据面版本必须在环境仓库中固定，
+# 升级时先按官方兼容矩阵升级 CRD，再升级控制器。
+podDisruptionBudget:
+  minAvailable: 2
+
+deployment:
+  replicas: 3
+  pod:
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            control-plane: envoy-gateway
+
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+      kubernetes:
+        # Envoy Proxy 与业务服务同处 eagle namespace，现有 NetworkPolicy
+        # 可以按 namespace 标签允许网关访问 HTTP 端口。
+        deploy:
+          type: GatewayNamespace
+        watch:
+          type: Namespaces
+          namespaces: [eagle]
+    logging:
+      level:
+        default: info
+

@@ -1,0 +1,118 @@
+groups:
+  - name: eagle-slo-recording
+    interval: 30s
+    rules:
+      - record: eagle:server_requests:rate5m
+        expr: sum by (service_name) (rate(server_requests_code_total[5m]))
+      - record: eagle:server_errors:rate5m
+        expr: sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[5m]))
+      - record: eagle:availability:ratio5m
+        expr: 1 - (eagle:server_errors:rate5m / clamp_min(eagle:server_requests:rate5m, 0.001))
+      - record: eagle:latency:p99_5m
+        expr: histogram_quantile(0.99, sum by (service_name, le) (rate(server_requests_seconds_bucket[5m])))
+
+  - name: eagle-slo-alerts
+    rules:
+      - alert: EagleServiceUnavailable
+        expr: up{job="eagle-services"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Eagle service target is unavailable"
+          description: "{{ $labels.instance }} has not been scraped for more than 2 minutes."
+
+      - alert: EagleAvailabilityErrorBudgetFastBurn
+        expr: |
+          (
+            sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[5m]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[5m])), 0.001)
+          ) > (14.4 * 0.001)
+          and
+          (
+            sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[1h]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[1h])), 0.001)
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels: {severity: critical, slo: availability-99.9}
+        annotations:
+          summary: "Availability SLO error budget is burning too fast"
+          description: "{{ $labels.service_name }} is consuming the 30-day error budget at more than 14.4x."
+
+      - alert: EagleAvailabilityErrorBudgetSlowBurn
+        expr: |
+          (
+            sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[30m]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[30m])), 0.001)
+          ) > (6 * 0.001)
+          and
+          (
+            sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[6h]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[6h])), 0.001)
+          ) > (6 * 0.001)
+        for: 15m
+        labels: {severity: warning, slo: availability-99.9}
+        annotations:
+          summary: "Availability SLO error budget is steadily burning"
+          description: "{{ $labels.service_name }} is consuming the 30-day error budget at more than 6x."
+
+      - alert: EagleP99LatencyHigh
+        expr: eagle:latency:p99_5m > 2
+        for: 10m
+        labels: {severity: warning, slo: latency-p99}
+        annotations:
+          summary: "Eagle p99 latency is above 2 seconds"
+          description: "{{ $labels.service_name }} p99 latency is {{ $value }} seconds."
+
+      - alert: EagleRabbitMQBacklog
+        expr: rabbitmq_queue_messages_ready{queue="eagle.admin.order-created.v1"} > 100
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Order-created notification queue is backing up"
+          description: "RabbitMQ has {{ $value }} ready messages for the admin consumer."
+
+      - alert: EagleRabbitMQDeadLetters
+        expr: increase(eagle_messaging_dead_lettered_total[10m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "Messages entered a dead-letter queue"
+          description: "{{ $labels.messaging_destination_name }} dead-lettered {{ $value }} messages in 10 minutes."
+
+      - alert: EagleOutboxParked
+        expr: eagle_outbox_failed > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "Order outbox contains parked events"
+          description: "{{ $value }} events exhausted their retry budget and need investigation."
+
+      - alert: EagleOutboxStalled
+        expr: eagle_outbox_oldest_pending_seconds > 300
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Order outbox relay is stalled"
+          description: "The oldest pending event is {{ $value }} seconds old."
+
+      - alert: EagleMQConsumerFailures
+        expr: increase(eagle_messaging_consume_failures_total[10m]) > 5
+        labels: {severity: warning}
+        annotations:
+          summary: "RabbitMQ consumer failures are elevated"
+          description: "{{ $labels.messaging_destination_name }} failed {{ $value }} handler attempts in 10 minutes."
+
+      - alert: EagleDatabaseBackupFailed
+        expr: kube_job_status_failed{namespace="eagle",job_name=~"(admin|product|order)-database-backup-.*"} > 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "A database backup job failed"
+          description: "{{ $labels.job_name }} failed; preserve logs and verify the last restorable object."
+
+      - alert: EagleRedisUnavailable
+        expr: redis_up == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Redis cache is unavailable"
+          description: "Product reads will fall back to PostgreSQL until Redis recovers."

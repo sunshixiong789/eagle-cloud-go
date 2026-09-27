@@ -1,0 +1,48 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: eagle
+    namespace: eagle
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: eagle
+  namespace: eagle
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 3
+        strategy:
+          type: RollingUpdate
+          rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+        pod:
+          priorityClassName: eagle-service
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+              labelSelector:
+                matchLabels:
+                  gateway.envoyproxy.io/owning-gateway-namespace: eagle
+                  gateway.envoyproxy.io/owning-gateway-name: eagle
+        container:
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+      envoyPDB:
+        minAvailable: 2
+      # K3s ServiceLB 在三个节点监听 80/443；上游 LB 只把流量发往
+      # 健康节点。Local 保留客户端源地址，并要求每个节点各有一个 Envoy Pod。
+      envoyService:
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+

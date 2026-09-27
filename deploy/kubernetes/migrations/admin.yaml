@@ -1,0 +1,21 @@
+# 发布模板：先替换为不可变镜像 digest，并为 Job 名追加发布标识。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: admin-migrate
+  labels: {app.kubernetes.io/name: admin-migrate, app.kubernetes.io/part-of: eagle}
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: migrate
+          image: registry.example.com/eagle/admin:dev
+          command: ["/app/migrate"]
+          args: ["-dir", "/app/migrations"]
+          env: [{name: EAGLE_DATABASE_DSN, valueFrom: {secretKeyRef: {name: eagle-runtime, key: admin-database-dsn}}}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}

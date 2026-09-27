@@ -1,0 +1,53 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: eagle-edge
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: eagle, sectionName: https}
+  tls: {minVersion: "1.2", maxVersion: "1.3"}
+  connection:
+    connectionLimit: {value: 10000, closeDelay: 1s}
+    bufferLimit: 64Ki
+  timeout:
+    http:
+      requestReceivedTimeout: 30s
+      requestHeadersReceivedTimeout: 10s
+      idleTimeout: 60s
+      streamIdleTimeout: 60s
+  tcpKeepalive: {idleTime: 60s, interval: 30s, probes: 3}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: eagle-api-resilience
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: eagle-api}
+  loadBalancer: {type: LeastRequest}
+  circuitBreaker:
+    maxConnections: 500
+    maxPendingRequests: 100
+    maxParallelRequests: 500
+    maxParallelRetries: 25
+  timeout:
+    tcp: {connectTimeout: 3s}
+    http: {connectionIdleTimeout: 60s, requestTimeout: 15s, streamIdleTimeout: 60s}
+  rateLimit:
+    local:
+      rules:
+        - limit: {requests: 300, unit: Second}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: eagle-api-cors
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: eagle-api}
+  cors:
+    allowOrigins: ["https://app.example.com"]
+    allowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+    allowHeaders: [Authorization, Content-Type, If-Match, X-Request-ID, Traceparent, Tracestate]
+    exposeHeaders: [X-Request-ID]
+    maxAge: 600s

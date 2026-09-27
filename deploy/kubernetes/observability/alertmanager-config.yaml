@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: eagle
+spec:
+  route:
+    receiver: eagle-oncall
+    groupBy: [alertname, service_name]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+  receivers:
+    - name: eagle-oncall
+      webhookConfigs:
+        - urlSecret:
+            name: eagle-alert-webhook
+            key: url
+          sendResolved: true

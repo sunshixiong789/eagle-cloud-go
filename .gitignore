@@ -1,0 +1,20 @@
+bin/
+dist/
+*.exe
+*.test
+*.out
+
+# 本地覆盖配置（含真实密码/密钥，绝不入库）
+*.local.yaml
+.env
+.env.*
+!.env.example
+
+# 签名私钥
+*.pem
+*.key
+!testdata/**/*.pem
+
+.idea/
+.vscode/
+.DS_Store

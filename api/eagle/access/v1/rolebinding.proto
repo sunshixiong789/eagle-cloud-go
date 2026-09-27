@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package eagle.access.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/access/v1;accessv1";
+
+// RoleBindingService 管理「角色 → 权限码」的映射，即 Casbin 的 p 策略。
+//
+// 角色本身不在这里创建或删除——它由 Keycloak 维护，随 token 的
+// realm_access.roles 下发。本服务只回答「这个角色能调哪些接口」。
+//
+// 这样切分的原因：把用户到角色的归属也放进本库，就等于与 Keycloak
+// 双写同一份数据，必然漂移；而把权限映射放进 Keycloak，则每次
+// 授权判定都要跨网络调用，且权限配置只能在 Keycloak 后台改。
+service RoleBindingService {
+  // 列出本库中已配置过权限的角色。
+  // 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
+  rpc ListBoundRoles(ListBoundRolesRequest) returns (ListBoundRolesResponse) {
+    option (google.api.http) = {get: "/v1/system/role-bindings"};
+    option (eagle.annotations.v1.perm) = "system:role:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc GetRolePermissions(GetRolePermissionsRequest) returns (GetRolePermissionsResponse) {
+    option (google.api.http) = {get: "/v1/system/role-bindings/{role}"};
+    option (eagle.annotations.v1.perm) = "system:role:query";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  // 全量覆盖某个角色的权限码集合，变更立即生效。
+  rpc SetRolePermissions(SetRolePermissionsRequest) returns (SetRolePermissionsResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/role-bindings/{role}"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:role:assign";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  // 建立角色继承：child 自动获得 parent 的全部权限。
+  rpc AddRoleInheritance(AddRoleInheritanceRequest) returns (AddRoleInheritanceResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/role-bindings/inheritance"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:role:assign";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc ListRoleInheritances(ListRoleInheritancesRequest) returns (ListRoleInheritancesResponse) {
+    option (google.api.http) = {get: "/v1/system/role-inheritances"};
+    option (eagle.annotations.v1.perm) = "system:role:query";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc DeleteRoleInheritance(DeleteRoleInheritanceRequest) returns (DeleteRoleInheritanceResponse) {
+    option (google.api.http) = {delete: "/v1/system/role-inheritances/{child}/{parent}"};
+    option (eagle.annotations.v1.perm) = "system:role:assign";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  // 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+  rpc GetMyPermissions(GetMyPermissionsRequest) returns (GetMyPermissionsResponse) {
+    option (google.api.http) = {get: "/v1/system/role-bindings/me/permissions"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
+  }
+}
+
+// RoleBinding 是一个角色及其被授予的权限码。
+message RoleBinding {
+  // 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
+  string role = 1;
+  repeated string permission_codes = 2;
+  int64 revision = 3;
+}
+
+message ListBoundRolesRequest {}
+
+message ListBoundRolesResponse {
+  repeated RoleBinding bindings = 1;
+  int64 policy_version = 2;
+}
+
+message GetRolePermissionsRequest {
+  string role = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
+  }];
+}
+
+message GetRolePermissionsResponse {
+  RoleBinding binding = 1;
+}
+
+message SetRolePermissionsRequest {
+  string role = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
+  }];
+  // 全量覆盖。传空数组表示收回该角色的全部权限。
+  repeated string permission_codes = 2;
+  optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
+}
+
+message SetRolePermissionsResponse {
+  int64 policy_version = 1;
+}
+
+message AddRoleInheritanceRequest {
+  string child = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
+  }];
+  string parent = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+    pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"
+  }];
+  optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
+}
+
+message AddRoleInheritanceResponse {
+  int64 policy_version = 1;
+}
+
+message RoleInheritance {
+  string child = 1;
+  string parent = 2;
+}
+
+message ListRoleInheritancesRequest {}
+
+message ListRoleInheritancesResponse {
+  repeated RoleInheritance inheritances = 1;
+  int64 policy_version = 2;
+}
+
+message DeleteRoleInheritanceRequest {
+  string child = 1 [(buf.validate.field).string = {min_len: 1, max_len: 128, pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"}];
+  string parent = 2 [(buf.validate.field).string = {min_len: 1, max_len: 128, pattern: "^(realm:[^:]+|client:[^:]+:[^:]+)$"}];
+  optional int64 expected_version = 3 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteRoleInheritanceResponse {
+  int64 policy_version = 1;
+}
+
+message GetMyPermissionsRequest {}
+
+message GetMyPermissionsResponse {
+  // 当前登录者的角色（来自 Keycloak token）
+  repeated string roles = 1;
+  // 这些角色展开后的全部权限码（含继承）
+  repeated string permission_codes = 2;
+}

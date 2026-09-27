@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: order-database-restore-confirmed
+  namespace: eagle
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      initContainers:
+        - name: download
+          image: amazon/aws-cli:2.27.41
+          command: ["/bin/sh", "-ec"]
+          args: ["test \"$RESTORE_CONFIRMED\" = yes && aws --endpoint-url \"$S3_ENDPOINT\" s3 cp \"$BACKUP_URI\" /backup/database.dump"]
+          envFrom: [{configMapRef: {name: eagle-backup}}]
+          env:
+            - {name: RESTORE_CONFIRMED, value: "CHANGE_ME"}
+            - {name: BACKUP_URI, value: "s3://CHANGE_ME/order.dump"}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: access-key}}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: secret-key}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 1000}
+          volumeMounts: [{name: backup, mountPath: /backup}]
+      containers:
+        - name: restore
+          image: postgres:17-alpine
+          command: ["/bin/sh", "-ec"]
+          args: ["pg_restore --list /backup/database.dump >/dev/null && pg_restore --clean --if-exists --no-owner --dbname=\"$DATABASE_URL\" /backup/database.dump"]
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: eagle-runtime, key: order-database-dsn}}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 999}
+          volumeMounts: [{name: backup, mountPath: /backup, readOnly: true}]
+      volumes: [{name: backup, emptyDir: {sizeLimit: 10Gi}}]

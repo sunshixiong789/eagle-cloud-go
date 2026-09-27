@@ -1,0 +1,11 @@
+version: v2
+
+# 进程内部配置 proto 的生成。
+# 与对外契约分开生成：配置结构不属于 API 契约，不需要 http/errors/openapi 插件。
+inputs:
+  - directory: pkg/platform/config
+
+plugins:
+  - local: ["go", "-C", "tools", "tool", "protoc-gen-go"]
+    out: pkg/platform/config
+    opt: paths=source_relative

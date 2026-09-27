@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - namespace.yaml
+  - service-monitor.yaml
+  - prometheus-rule.yaml
+  - alertmanager-config.yaml
+configMapGenerator:
+  - name: eagle-grafana-dashboard
+    files:
+      - eagle-overview.json=dashboards/eagle-overview.json
+    options:
+      labels:
+        grafana_dashboard: "1"

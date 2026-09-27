@@ -1,0 +1,54 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - gosec
+    - misspell
+    - nilerr
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+    - whitespace
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+    gosec:
+      excludes:
+        # G115 整数溢出转换：proto 的 int32 <-> int 转换太多，噪音大于价值
+        - G115
+
+  exclusions:
+    rules:
+      # 生成代码不做检查
+      - path: '(\.pb\.go|\.pb\.web\.go|wire_gen\.go|/sqlc/)'
+        linters:
+          - all
+      # 测试里允许硬编码凭据和裸 error 比较
+      - path: '_test\.go'
+        linters:
+          - gosec
+          - errorlint
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/eagle-go/eagle

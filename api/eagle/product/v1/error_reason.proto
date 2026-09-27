@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package eagle.product.v1;
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/product/v1;productv1";
+
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_PRODUCT_NOT_FOUND = 1;
+  ERROR_REASON_PRODUCT_SKU_DUPLICATED = 2;
+  ERROR_REASON_INVALID_PRODUCT = 3;
+}

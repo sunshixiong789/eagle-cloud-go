@@ -1,0 +1,40 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # 批量上报，减少与后端之间的往返
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  # 限制内存占用，避免后端不可用时 collector 无限堆积直至 OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      # memory_limiter 必须排在最前：它要在数据进入其余处理器之前就拦下来
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+
+  telemetry:
+    logs:
+      level: warn

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package eagle.order.v1;
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/order/v1;orderv1";
+
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_ORDER_NOT_FOUND = 1;
+  ERROR_REASON_PRODUCT_UNAVAILABLE = 2;
+  ERROR_REASON_INVALID_ORDER = 3;
+}

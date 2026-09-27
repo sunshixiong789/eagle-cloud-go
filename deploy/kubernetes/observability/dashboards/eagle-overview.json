@@ -1,0 +1,21 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"percentunit"}},"gridPos":{"h":7,"w":8,"x":0,"y":0},"id":1,"targets":[{"expr":"eagle:availability:ratio5m","legendFormat":"{{service_name}}","refId":"A"}],"title":"5m availability","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"fieldConfig":{"defaults":{"unit":"s"}},"gridPos":{"h":7,"w":8,"x":8,"y":0},"id":2,"targets":[{"expr":"eagle:latency:p99_5m","legendFormat":"{{service_name}}","refId":"A"}],"title":"p99 latency","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":7,"w":8,"x":16,"y":0},"id":3,"targets":[{"expr":"sum by (queue) (rabbitmq_queue_messages_ready{queue=~\"eagle\\..*\"})","legendFormat":"{{queue}}","refId":"A"}],"title":"RabbitMQ ready messages","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":7,"w":8,"x":0,"y":7},"id":4,"targets":[{"expr":"eagle_outbox_pending","legendFormat":"pending","refId":"A"},{"expr":"eagle_outbox_failed","legendFormat":"parked","refId":"B"}],"title":"Order outbox","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":7,"w":8,"x":8,"y":7},"id":5,"targets":[{"expr":"sum by (messaging_destination_name) (rate(eagle_messaging_consume_failures_total[5m]))","legendFormat":"{{messaging_destination_name}}","refId":"A"}],"title":"MQ consumer failures/s","type":"timeseries"},
+    {"datasource":{"type":"prometheus","uid":"prometheus"},"gridPos":{"h":7,"w":8,"x":16,"y":7},"id":6,"targets":[{"expr":"sum by (service_name) (rate(server_requests_code_total[5m]))","legendFormat":"{{service_name}}","refId":"A"}],"title":"Request throughput","type":"timeseries"}
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["eagle", "slo"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "Eagle production overview",
+  "uid": "eagle-overview",
+  "version": 1
+}

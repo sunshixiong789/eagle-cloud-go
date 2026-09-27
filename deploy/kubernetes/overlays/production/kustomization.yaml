@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: eagle
+resources:
+  - ../../base
+  - ../../gateway
+  - hardening.yaml
+images:
+  - {name: registry.example.com/eagle/admin, newName: ghcr.io/your-org/eagle/admin, newTag: stable}
+  - {name: registry.example.com/eagle/product, newName: ghcr.io/your-org/eagle/product, newTag: stable}
+  - {name: registry.example.com/eagle/order, newName: ghcr.io/your-org/eagle/order, newTag: stable}
+patches:
+  - target: {kind: Deployment}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 3}
+  - target: {kind: HorizontalPodAutoscaler}
+    patch: |-
+      - {op: replace, path: /spec/minReplicas, value: 3}
+  - target: {kind: PodDisruptionBudget}
+    patch: |-
+      - {op: replace, path: /spec/minAvailable, value: 2}
+  - target: {kind: ConfigMap, name: eagle-runtime}
+    patch: |-
+      - {op: replace, path: /data/EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO, value: "0.02"}
+  - target: {kind: Deployment}
+    patch: |-
+      - {op: add, path: /spec/template/spec/priorityClassName, value: eagle-service}

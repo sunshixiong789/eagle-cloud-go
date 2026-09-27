@@ -1,0 +1,11 @@
+go 1.27.0
+
+use (
+	./api
+	./app/admin
+	./app/order
+	./app/product
+	./pkg
+	./tests
+	./tools
+)

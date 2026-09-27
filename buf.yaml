@@ -1,0 +1,28 @@
+version: v2
+
+# 两个 module root：
+#   api                       -> 对外契约，严格 lint + breaking 检查
+#   pkg/platform/config       -> 进程内部配置，只做基础 lint
+modules:
+  - path: api
+  - path: pkg/platform/config
+    lint:
+      use:
+        - BASIC
+      except:
+        # 配置 proto 不是对外 API，包名按职责命名，不要求匹配 module 根目录。
+        - PACKAGE_DIRECTORY_MATCH
+
+deps:
+  - buf.build/googleapis/googleapis
+  # 字段级校验规则。与 contrib/middleware/validate/v3 配套，
+  # 校验声明写在契约里，跨语言客户端可复用同一套规则。
+  - buf.build/bufbuild/protovalidate
+
+lint:
+  use:
+    - STANDARD
+
+breaking:
+  use:
+    - FILE

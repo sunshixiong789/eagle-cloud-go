@@ -1,0 +1,72 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: eagle-slo
+spec:
+  groups:
+    - name: eagle-slo-recording
+      interval: 30s
+      rules:
+        - record: eagle:server_requests:rate5m
+          expr: sum by (service_name) (rate(server_requests_code_total[5m]))
+        - record: eagle:server_errors:rate5m
+          expr: sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[5m]))
+        - record: eagle:availability:ratio5m
+          expr: 1 - (eagle:server_errors:rate5m / clamp_min(eagle:server_requests:rate5m, 0.001))
+        - record: eagle:latency:p99_5m
+          expr: histogram_quantile(0.99, sum by (service_name, le) (rate(server_requests_seconds_bucket[5m])))
+    - name: eagle-slo-alerts
+      rules:
+        - alert: EagleServiceUnavailable
+          expr: up{service_name=~"admin|product|order"} == 0
+          for: 2m
+          labels: {severity: critical}
+          annotations: {summary: "Eagle service is unavailable"}
+        - alert: EagleAvailabilityErrorBudgetFastBurn
+          expr: >-
+            (sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[5m]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[5m])), 0.001)) > (14.4 * 0.001)
+            and
+            (sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[1h]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[1h])), 0.001)) > (14.4 * 0.001)
+          for: 2m
+          labels: {severity: critical, slo: availability-99.9}
+          annotations: {summary: "Availability SLO error budget is burning too fast"}
+        - alert: EagleAvailabilityErrorBudgetSlowBurn
+          expr: >-
+            (sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[30m]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[30m])), 0.001)) > (6 * 0.001)
+            and
+            (sum by (service_name) (rate(server_requests_code_total{code=~"5.."}[6h]))
+            / clamp_min(sum by (service_name) (rate(server_requests_code_total[6h])), 0.001)) > (6 * 0.001)
+          for: 15m
+          labels: {severity: warning, slo: availability-99.9}
+          annotations: {summary: "Availability SLO error budget is steadily burning"}
+        - alert: EagleP99LatencyHigh
+          expr: eagle:latency:p99_5m > 2
+          for: 10m
+          labels: {severity: warning, slo: latency-p99}
+          annotations: {summary: "Eagle p99 latency is above 2 seconds"}
+        - alert: EagleRabbitMQDeadLetters
+          expr: increase(eagle_messaging_dead_lettered_total[10m]) > 0
+          labels: {severity: critical}
+          annotations: {summary: "Messages entered a dead-letter queue"}
+        - alert: EagleOutboxParked
+          expr: eagle_outbox_failed > 0
+          for: 5m
+          labels: {severity: critical}
+          annotations: {summary: "Order outbox contains parked events"}
+        - alert: EagleOutboxStalled
+          expr: eagle_outbox_oldest_pending_seconds > 300
+          for: 10m
+          labels: {severity: warning}
+          annotations: {summary: "Order outbox relay is stalled"}
+        - alert: EagleMQConsumerFailures
+          expr: increase(eagle_messaging_consume_failures_total[10m]) > 5
+          labels: {severity: warning}
+          annotations: {summary: "RabbitMQ consumer failures are elevated"}
+        - alert: EagleDatabaseBackupFailed
+          expr: kube_job_status_failed{namespace="eagle",job_name=~"(admin|product|order)-database-backup-.*"} > 0
+          for: 5m
+          labels: {severity: critical}
+          annotations: {summary: "A database backup job failed"}

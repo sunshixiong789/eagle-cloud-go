@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package eagle.platform.config;
+
+// 全部时长字段都用 Duration 而不是裸字符串/整数：类型在编译期就固定了单位，
+// 不会出现「这个数字到底是秒还是毫秒」的歧义。
+//
+// 但 YAML 里只认「数字 + s」这一种写法，如 3600s、0.5s。
+// Go 风格的 1h / 30m / 500ms 会在启动阶段解析失败，且报错信息只说
+// invalid google.protobuf.Duration value，不指向具体是哪个字段——
+// 这个坑真实踩过，见 app/<service>/configs/config.yaml 开头的说明
+// 和 config_test.go 里挡住它的回归测试。
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/eagle-go/eagle/pkg/platform/config;config";
+
+// Bootstrap 是配置文件的根消息，对应各服务 configs/config.yaml 的顶层结构。
+message Bootstrap {
+  Server server = 1;
+  Data data = 2;
+  Auth auth = 3;
+  Observability observability = 4;
+  File file = 5;
+  Upstream upstream = 6;
+  Cache cache = 7;
+  Messaging messaging = 8;
+  ServiceAuth service_auth = 9;
+}
+
+// Upstream contains static development endpoints for synchronous service
+// calls. Kubernetes service DNS or a service mesh supplies these addresses in
+// production; the application does not embed a registry SDK.
+message Upstream {
+  string authorization_endpoint = 1;
+  string product_endpoint = 2;
+  google.protobuf.Duration timeout = 3;
+  int32 max_attempts = 4;
+  google.protobuf.Duration retry_backoff = 5;
+  // Resource services periodically replace their local authorization snapshot.
+  google.protobuf.Duration authorization_refresh_interval = 6;
+}
+
+// File configures the development/local blob adapter. The module keeps a
+// storage port so production deployments can replace it with S3 or OSS.
+message File {
+  // local 只用于开发；s3 可连接 AWS S3、OSS、MinIO 等兼容服务。
+  string provider = 3;
+  string local_dir = 1;
+  int64 max_size_bytes = 2;
+  message S3 {
+    string endpoint = 1;
+    string region = 2;
+    string bucket = 3;
+    string access_key = 4;
+    string secret_key = 5;
+    bool use_ssl = 6;
+  }
+  S3 s3 = 4;
+}
+
+message Cache {
+  message Redis {
+    bool enabled = 1;
+    string address = 2;
+    string username = 3;
+    string password = 4;
+    int32 database = 5;
+    google.protobuf.Duration ttl = 6;
+  }
+  Redis redis = 1;
+}
+
+message Messaging {
+  message RabbitMQ {
+    bool enabled = 1;
+    string url = 2;
+    string exchange = 3;
+    string order_created_queue = 4;
+    google.protobuf.Duration reconnect_backoff = 5;
+    int32 consumer_max_attempts = 6;
+    google.protobuf.Duration consumer_retry_backoff = 7;
+  }
+  RabbitMQ rabbitmq = 1;
+}
+
+// ServiceAuth 是调用方通过 Keycloak client_credentials 获取短期服务令牌的配置。
+message ServiceAuth {
+  string token_url = 1;
+  string client_id = 2;
+  string client_secret = 3;
+}
+
+// Server 是 HTTP/gRPC 监听参数。
+message Server {
+  message HTTP {
+    // 网络类型，如 tcp。留空即可——不设置时用 Kratos 的默认值，
+    // 只有 unix socket 这类特殊场景才需要显式指定。
+    string network = 1;
+    // 监听地址，如 0.0.0.0:8000
+    string addr = 2;
+    // 单次请求的处理超时，本项目默认 5s
+    google.protobuf.Duration timeout = 3;
+  }
+  message GRPC {
+    // 网络类型，如 tcp。留空即可，同 HTTP.network
+    string network = 1;
+    // 监听地址，如 0.0.0.0:9000
+    string addr = 2;
+    // 单次请求的处理超时，本项目默认 5s
+    google.protobuf.Duration timeout = 3;
+  }
+  HTTP http = 1;
+  GRPC grpc = 2;
+}
+
+message Data {
+  message Database {
+    // pgx 连接串，如 postgres://user:pass@host:5432/db?sslmode=disable
+    string dsn = 1;
+    // 连接池上限。开发环境 20 足够，生产按并发量调
+    int32 max_conns = 2;
+    // 连接池最多保留的空闲连接数。database/sql 不保证最小常驻连接数。
+    int32 max_idle_conns = 3;
+    // 单个连接的最长存活时间，到点后即使空闲也会被回收重建，
+    // 避免连接长期存活后遇到的数据库侧超时/负载均衡漂移问题
+    google.protobuf.Duration max_conn_lifetime = 4;
+    // 连接空闲超过这个时长就会被释放，回收长期没人用的连接
+    google.protobuf.Duration max_conn_idle_time = 5;
+  }
+  Database database = 1;
+  reserved 2;
+}
+
+// system 作为 OAuth2 资源服务器（面向 Keycloak）的配置
+message Auth {
+  // Keycloak realm 的 issuer，形如
+  // https://keycloak.example.com/realms/eagle
+  // 必须与 token 里的 iss 完全一致，含协议、端口和是否带尾斜杠
+  string issuer = 1;
+
+  // 本服务在 Keycloak 中的 client id。
+  // 用于从 token 的 resource_access 里取出本服务的 client 角色
+  string client_id = 2;
+
+  // 期望的 aud。Keycloak 默认把 aud 设成 "account"，
+  // 通常要配 audience mapper 才有意义，留空则不校验
+  string audience = 3;
+
+  reserved 4;
+
+  // 在 resource_access.<client_id>.roles 中拥有该 client 角色的主体
+  // 跳过 Casbin 判定；同名 realm 角色不会触发短路。
+  string super_admin_role = 5;
+
+  // 拉取 JWKS 的地址，留空则按 Keycloak 约定推导为
+  // <issuer>/protocol/openid-connect/certs
+  //
+  // 之所以能与 issuer 分开配：容器与 K8s 里，token 里的公开 issuer
+  // （https://sso.example.com/realms/eagle）几乎从不等于本服务该走的
+  // 集群内地址（http://keycloak.default.svc:8080/realms/eagle）。
+  // 两者不分开就只能二选一——要么让内网流量绕到公网再回来，
+  // 要么放弃 iss 校验。
+  string jwks_url = 6;
+
+  // 允许调用 INTERNAL RPC 的 Keycloak azp。必须同时是 client_credentials
+  // 服务令牌，普通用户 token 即使 azp 同名也不会被放行。
+  repeated string internal_client_ids = 7;
+}
+
+message Observability {
+  // OTLP gRPC 端点，如 127.0.0.1:4317。留空则不上报链路
+  string otlp_endpoint = 1;
+  // 采样率 0.0~1.0。生产环境建议 0.01~0.1
+  double trace_sample_ratio = 2;
+  // debug / info / warn / error
+  string log_level = 3;
+  // Prometheus 指标暴露地址，如 0.0.0.0:9100
+  string metrics_addr = 4;
+  // 集群内明文 OTLP 显式设为 true；跨网络保持 false，使用系统 TLS 根证书。
+  bool otlp_insecure = 5;
+}

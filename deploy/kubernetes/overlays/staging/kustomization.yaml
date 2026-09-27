@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: eagle
+resources:
+  - ../../base
+  - ../../gateway
+images:
+  - {name: registry.example.com/eagle/admin, newName: ghcr.io/your-org/eagle/admin, newTag: staging}
+  - {name: registry.example.com/eagle/product, newName: ghcr.io/your-org/eagle/product, newTag: staging}
+  - {name: registry.example.com/eagle/order, newName: ghcr.io/your-org/eagle/order, newTag: staging}
+patches:
+  - target: {kind: Gateway, name: eagle}
+    patch: |-
+      - {op: replace, path: /spec/listeners/0/hostname, value: api.staging.example.com}
+      - {op: replace, path: /spec/listeners/1/hostname, value: api.staging.example.com}
+  - target: {kind: HTTPRoute}
+    patch: |-
+      - {op: replace, path: /spec/hostnames/0, value: api.staging.example.com}
+  - target: {kind: SecurityPolicy, name: eagle-api-cors}
+    patch: |-
+      - {op: replace, path: /spec/cors/allowOrigins/0, value: "https://app.staging.example.com"}

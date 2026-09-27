@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eagle-backup
+data:
+  S3_ENDPOINT: https://s3.example.com
+  S3_BUCKET: eagle-backups
+  S3_PREFIX: production/postgres
+  AWS_DEFAULT_REGION: us-east-1
+  RETENTION_DAYS: "35"

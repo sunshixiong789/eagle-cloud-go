@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+.vscode
+.agents
+bin
+dist
+coverage
+coverage.out
+*.test
+*.local.yaml
+.env
+.env.*
+docs
+README.md
+AGENTS.md
+deploy

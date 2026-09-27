@@ -1,0 +1,11 @@
+route:
+  receiver: default
+  group_by: [alertname, service_name]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  # 本地只在 Alertmanager UI 查看。生产 overlay 应替换为 PagerDuty、
+  # Slack、钉钉或企业告警平台的 receiver。
+  - name: default

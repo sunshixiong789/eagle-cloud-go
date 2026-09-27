@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package eagle.notification.v1;
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/notification/v1;notificationv1";
+
+// ErrorReason identifies notification-module failures independently of transport status codes.
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_NOTIFICATION_NOT_FOUND = 60;
+}

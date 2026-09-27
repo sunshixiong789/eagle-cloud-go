@@ -1,0 +1,26 @@
+# Tempo 单体模式配置（本地开发用）。
+#
+# 刻意保持最小：ingester / compactor 的调优项全部走默认值。
+# Tempo 3.0 重构过配置 schema，写得越多越容易在升级时炸掉，
+# 而这些调优对本地开发毫无意义。
+#
+# 生产部署应改用 Helm chart 或官方的分布式部署配置，
+# 而不是照抄这份文件。
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal

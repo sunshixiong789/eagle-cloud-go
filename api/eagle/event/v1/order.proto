@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package eagle.event.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/event/v1;eventv1";
+
+// OrderCreatedV1 is emitted after an order and its items commit locally.
+message OrderCreatedV1 {
+  string event_id = 1;
+  string order_id = 2;
+  string owner_subject = 3;
+  int64 total_cents = 4;
+  google.protobuf.Timestamp occurred_at = 5;
+}

@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package eagle.product.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/product/v1;productv1";
+
+service ProductService {
+  rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse) {
+    option (google.api.http) = {post: "/v1/products" body: "*"};
+    option (eagle.annotations.v1.perm) = "product:product:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse) {
+    option (google.api.http) = {get: "/v1/products/{id}"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+  rpc BatchGetProducts(BatchGetProductsRequest) returns (BatchGetProductsResponse) {
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
+  }
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse) {
+    option (google.api.http) = {get: "/v1/products"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PUBLIC;
+  }
+  rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse) {
+    option (google.api.http) = {put: "/v1/products/{id}" body: "*"};
+    option (eagle.annotations.v1.perm) = "product:product:edit";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+  rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse) {
+    option (google.api.http) = {delete: "/v1/products/{id}"};
+    option (eagle.annotations.v1.perm) = "product:product:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+}
+
+message Product {
+  int64 id = 1;
+  string sku = 2;
+  string name = 3;
+  string description = 4;
+  int64 price_cents = 5;
+  bool active = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message CreateProductRequest {
+  string sku = 1 [(buf.validate.field).string = {min_len: 1 max_len: 64}];
+  string name = 2 [(buf.validate.field).string = {min_len: 1 max_len: 128}];
+  string description = 3 [(buf.validate.field).string.max_len = 2048];
+  int64 price_cents = 4 [(buf.validate.field).int64.gt = 0];
+  bool active = 5;
+}
+message CreateProductResponse { Product product = 1; }
+
+message GetProductRequest { int64 id = 1 [(buf.validate.field).int64.gt = 0]; }
+message GetProductResponse { Product product = 1; }
+
+message BatchGetProductsRequest {
+  repeated int64 ids = 1 [(buf.validate.field).repeated = {
+    min_items: 1
+    max_items: 100
+    unique: true
+    items: {int64: {gt: 0}}
+  }];
+}
+message BatchGetProductsResponse { repeated Product products = 1; }
+
+message ListProductsRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {gte: 0 lte: 200}];
+  bool active_only = 3;
+}
+message ListProductsResponse {
+  repeated Product products = 1;
+  int64 total = 2;
+}
+
+message UpdateProductRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string name = 2 [(buf.validate.field).string = {min_len: 1 max_len: 128}];
+  string description = 3 [(buf.validate.field).string.max_len = 2048];
+  int64 price_cents = 4 [(buf.validate.field).int64.gt = 0];
+  bool active = 5;
+}
+message UpdateProductResponse { Product product = 1; }
+
+message DeleteProductRequest { int64 id = 1 [(buf.validate.field).int64.gt = 0]; }
+message DeleteProductResponse {}

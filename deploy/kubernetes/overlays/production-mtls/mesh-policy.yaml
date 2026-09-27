@@ -1,0 +1,40 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata: {name: eagle-internal-mtls}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/part-of: eagle}}
+  mtls: {mode: STRICT}
+  portLevelMtls:
+    "8000": {mode: PERMISSIVE}
+    "9100": {mode: PERMISSIVE}
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: admin-callers}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: admin}}
+  action: ALLOW
+  rules:
+    - to: [{operation: {ports: ["8000", "9100"]}}]
+    - from: [{source: {principals: ["cluster.local/ns/eagle/sa/eagle-product"]}}]
+      to: [{operation: {ports: ["9000"]}}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: product-callers}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: product}}
+  action: ALLOW
+  rules:
+    - to: [{operation: {ports: ["8000", "9100"]}}]
+    - from: [{source: {principals: ["cluster.local/ns/eagle/sa/eagle-order"]}}]
+      to: [{operation: {ports: ["9000"]}}]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: {name: order-callers}
+spec:
+  selector: {matchLabels: {app.kubernetes.io/name: order}}
+  action: ALLOW
+  rules:
+    - to: [{operation: {ports: ["8000", "9100"]}}]

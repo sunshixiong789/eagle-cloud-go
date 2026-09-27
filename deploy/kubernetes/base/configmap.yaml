@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eagle-runtime
+data:
+  EAGLE_SERVER_HTTP_ADDR: 0.0.0.0:8000
+  EAGLE_SERVER_GRPC_ADDR: 0.0.0.0:9000
+  EAGLE_OBSERVABILITY_METRICS_ADDR: 0.0.0.0:9100
+  EAGLE_OBSERVABILITY_OTLP_ENDPOINT: otel-collector.observability.svc:4317
+  EAGLE_OBSERVABILITY_OTLP_INSECURE: "true"
+  EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO: "0.05"
+  EAGLE_AUTH_ISSUER: https://sso.example.com/realms/eagle
+  EAGLE_AUTH_JWKS_URL: http://keycloak.identity.svc:8080/realms/eagle/protocol/openid-connect/certs
+  # Headless Service 返回全部就绪 Pod；dns resolver + Kratos wrr 避免
+  # gRPC 长连接长期固定在单个后端实例。
+  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: dns:///admin-grpc.eagle.svc.cluster.local:9000
+  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: dns:///product-grpc.eagle.svc.cluster.local:9000
+  EAGLE_SERVICE_AUTH_TOKEN_URL: http://keycloak.identity.svc:8080/realms/eagle/protocol/openid-connect/token
+  EAGLE_CACHE_REDIS_ADDRESS: redis.example.internal:6379
+  EAGLE_FILE_PROVIDER: s3
+  EAGLE_FILE_S3_ENDPOINT: s3.example.internal
+  EAGLE_FILE_S3_BUCKET: eagle-files
+  EAGLE_FILE_S3_REGION: us-east-1
+  EAGLE_FILE_S3_USE_SSL: "true"

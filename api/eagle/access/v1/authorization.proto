@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package eagle.access.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/access/v1;accessv1";
+
+// AuthorizationService is the internal policy decision boundary used by
+// resource services. It deliberately exposes no policy mutation methods.
+service AuthorizationService {
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse) {
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
+  }
+  // GetPolicySnapshot lets resource services evaluate permissions locally.
+  // A monotonically increasing version makes replacement atomic and observable.
+  rpc GetPolicySnapshot(GetPolicySnapshotRequest) returns (GetPolicySnapshotResponse) {
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_INTERNAL;
+  }
+}
+
+message CheckPermissionRequest {
+  repeated string roles = 1 [(buf.validate.field).repeated.items.string = {
+    min_len: 1
+    max_len: 128
+  }];
+  string permission = 2 [(buf.validate.field).string = {
+    min_len: 5
+    max_len: 128
+  }];
+}
+
+message CheckPermissionResponse {
+  bool allowed = 1;
+  int64 policy_version = 2;
+}
+
+message GetPolicySnapshotRequest {}
+
+message PolicyRule {
+  string ptype = 1;
+  repeated string values = 2;
+}
+
+message GetPolicySnapshotResponse {
+  repeated PolicyRule rules = 1;
+  int64 policy_version = 2;
+}

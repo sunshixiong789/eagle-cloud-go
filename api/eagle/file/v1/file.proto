@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package eagle.file.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+import "google/api/httpbody.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/file/v1;filev1";
+
+// FileService provides the small-file workflow used by the foundation. HTTP
+// uploads and downloads use raw bodies rather than JSON/base64 encoding.
+service FileService {
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/files:upload"
+      body: "content"
+    };
+    option (eagle.annotations.v1.perm) = "system:file:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc GetFile(GetFileRequest) returns (GetFileResponse) {
+    option (google.api.http) = {get: "/v1/system/files/{id}"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
+  }
+
+  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse) {
+    option (google.api.http) = {
+      get: "/v1/system/files/{id}/content"
+      response_body: "content"
+    };
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
+  }
+
+  rpc ListMyFiles(ListMyFilesRequest) returns (ListMyFilesResponse) {
+    option (google.api.http) = {get: "/v1/system/files"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
+  }
+
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse) {
+    option (google.api.http) = {delete: "/v1/system/files/{id}"};
+    option (eagle.annotations.v1.perm) = "system:file:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+}
+
+message File {
+  string id = 1;
+  string name = 2;
+  string content_type = 3;
+  int64 size = 4;
+  string sha256 = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message UploadFileRequest {
+  string filename = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 255
+  }];
+  google.api.HttpBody content = 2 [(buf.validate.field).required = true];
+}
+
+message UploadFileResponse {
+  File file = 1;
+}
+
+message GetFileRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message GetFileResponse {
+  File file = 1;
+}
+
+message DownloadFileRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DownloadFileResponse {
+  google.api.HttpBody content = 1;
+}
+
+message ListMyFilesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+}
+
+message ListMyFilesResponse {
+  repeated File files = 1;
+  int64 total = 2;
+}
+
+message DeleteFileRequest {
+  string id = 1 [(buf.validate.field).string.uuid = true];
+}
+
+message DeleteFileResponse {}

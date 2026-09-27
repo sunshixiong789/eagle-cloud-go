@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: eagle
+resources:
+  - ../production
+  - mesh-policy.yaml
+patches:
+  - target: {kind: Namespace, name: eagle}
+    patch: |-
+      - {op: add, path: /metadata/labels/istio-injection, value: enabled}

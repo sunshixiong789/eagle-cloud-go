@@ -1,0 +1,1464 @@
+# Generated with protoc-gen-openapi
+# https://github.com/google/gnostic/tree/master/cmd/protoc-gen-openapi
+
+openapi: 3.0.3
+info:
+    title: ""
+    version: 0.0.1
+paths:
+    /v1/orders:
+        get:
+            tags:
+                - OrderService
+            operationId: OrderService_ListMyOrders
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.order.v1.ListMyOrdersResponse'
+        post:
+            tags:
+                - OrderService
+            operationId: OrderService_CreateOrder
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.order.v1.CreateOrderRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.order.v1.CreateOrderResponse'
+    /v1/orders/{id}:
+        get:
+            tags:
+                - OrderService
+            operationId: OrderService_GetMyOrder
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.order.v1.GetMyOrderResponse'
+    /v1/products:
+        get:
+            tags:
+                - ProductService
+            operationId: ProductService_ListProducts
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: activeOnly
+                  in: query
+                  schema:
+                    type: boolean
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.product.v1.ListProductsResponse'
+        post:
+            tags:
+                - ProductService
+            operationId: ProductService_CreateProduct
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.product.v1.CreateProductRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.product.v1.CreateProductResponse'
+    /v1/products/{id}:
+        get:
+            tags:
+                - ProductService
+            operationId: ProductService_GetProduct
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.product.v1.GetProductResponse'
+        put:
+            tags:
+                - ProductService
+            operationId: ProductService_UpdateProduct
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.product.v1.UpdateProductRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.product.v1.UpdateProductResponse'
+        delete:
+            tags:
+                - ProductService
+            operationId: ProductService_DeleteProduct
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.product.v1.DeleteProductResponse'
+    /v1/system/dict/data:
+        get:
+            tags:
+                - DictService
+            operationId: DictService_ListDictData
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: dictType
+                  in: query
+                  schema:
+                    type: string
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.ListDictDataResponse'
+        post:
+            tags:
+                - DictService
+            operationId: DictService_CreateDictData
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.dictionary.v1.CreateDictDataRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.CreateDictDataResponse'
+    /v1/system/dict/data/type/{dictType}:
+        get:
+            tags:
+                - DictService
+            description: |-
+                按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
+                 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+            operationId: DictService_GetDictDataByType
+            parameters:
+                - name: dictType
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.GetDictDataByTypeResponse'
+    /v1/system/dict/data/{id}:
+        put:
+            tags:
+                - DictService
+            operationId: DictService_UpdateDictData
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.dictionary.v1.UpdateDictDataRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.UpdateDictDataResponse'
+        delete:
+            tags:
+                - DictService
+            operationId: DictService_DeleteDictData
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.DeleteDictDataResponse'
+    /v1/system/dict/types:
+        get:
+            tags:
+                - DictService
+            operationId: DictService_ListDictTypes
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: keyword
+                  in: query
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.ListDictTypesResponse'
+        post:
+            tags:
+                - DictService
+            operationId: DictService_CreateDictType
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.dictionary.v1.CreateDictTypeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.CreateDictTypeResponse'
+    /v1/system/dict/types/{id}:
+        put:
+            tags:
+                - DictService
+            operationId: DictService_UpdateDictType
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.dictionary.v1.UpdateDictTypeRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.UpdateDictTypeResponse'
+        delete:
+            tags:
+                - DictService
+            operationId: DictService_DeleteDictType
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.dictionary.v1.DeleteDictTypeResponse'
+    /v1/system/files:
+        get:
+            tags:
+                - FileService
+            operationId: FileService_ListMyFiles
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.file.v1.ListMyFilesResponse'
+    /v1/system/files/{id}:
+        get:
+            tags:
+                - FileService
+            operationId: FileService_GetFile
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.file.v1.GetFileResponse'
+        delete:
+            tags:
+                - FileService
+            operationId: FileService_DeleteFile
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.file.v1.DeleteFileResponse'
+    /v1/system/files/{id}/content:
+        get:
+            tags:
+                - FileService
+            operationId: FileService_DownloadFile
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.file.v1.DownloadFileResponse'
+    /v1/system/files:upload:
+        post:
+            tags:
+                - FileService
+            operationId: FileService_UploadFile
+            parameters:
+                - name: filename
+                  in: query
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            type: string
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.file.v1.UploadFileResponse'
+    /v1/system/notifications:
+        get:
+            tags:
+                - NotificationService
+            operationId: NotificationService_ListMyNotifications
+            parameters:
+                - name: page
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: pageSize
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: unreadOnly
+                  in: query
+                  schema:
+                    type: boolean
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.notification.v1.ListMyNotificationsResponse'
+        post:
+            tags:
+                - NotificationService
+            operationId: NotificationService_SendNotification
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.notification.v1.SendNotificationRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.notification.v1.SendNotificationResponse'
+    /v1/system/notifications/unread-count:
+        get:
+            tags:
+                - NotificationService
+            operationId: NotificationService_GetMyUnreadCount
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.notification.v1.GetMyUnreadCountResponse'
+    /v1/system/notifications/{id}:read:
+        put:
+            tags:
+                - NotificationService
+            operationId: NotificationService_MarkNotificationRead
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.notification.v1.MarkNotificationReadResponse'
+    /v1/system/notifications:read-all:
+        put:
+            tags:
+                - NotificationService
+            operationId: NotificationService_MarkAllNotificationsRead
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.notification.v1.MarkAllNotificationsReadResponse'
+    /v1/system/permissions:
+        get:
+            tags:
+                - PermissionService
+            description: 平铺返回全部权限，树结构由调用方按 parent_id 拼装
+            operationId: PermissionService_ListPermissions
+            parameters:
+                - name: status
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+                - name: type
+                  in: query
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.ListPermissionsResponse'
+        post:
+            tags:
+                - PermissionService
+            operationId: PermissionService_CreatePermission
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.access.v1.CreatePermissionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.CreatePermissionResponse'
+    /v1/system/permissions/me/menus:
+        get:
+            tags:
+                - PermissionService
+            description: |-
+                当前登录用户的菜单树与权限码，供前端渲染路由和按钮级控制。
+                 只需登录，无需额外权限码——查的就是自己的东西。
+            operationId: PermissionService_GetMyMenus
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.GetMyMenusResponse'
+    /v1/system/permissions/{id}:
+        get:
+            tags:
+                - PermissionService
+            operationId: PermissionService_GetPermission
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.GetPermissionResponse'
+        put:
+            tags:
+                - PermissionService
+            operationId: PermissionService_UpdatePermission
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.access.v1.UpdatePermissionRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.UpdatePermissionResponse'
+        delete:
+            tags:
+                - PermissionService
+            operationId: PermissionService_DeletePermission
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: expectedRevision
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.DeletePermissionResponse'
+    /v1/system/role-bindings:
+        get:
+            tags:
+                - RoleBindingService
+            description: |-
+                列出本库中已配置过权限的角色。
+                 注意这不是 Keycloak 的角色全集——从未分配过权限的角色不会出现。
+            operationId: RoleBindingService_ListBoundRoles
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.ListBoundRolesResponse'
+    /v1/system/role-bindings/inheritance:
+        post:
+            tags:
+                - RoleBindingService
+            description: 建立角色继承：child 自动获得 parent 的全部权限。
+            operationId: RoleBindingService_AddRoleInheritance
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.access.v1.AddRoleInheritanceRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.AddRoleInheritanceResponse'
+    /v1/system/role-bindings/me/permissions:
+        get:
+            tags:
+                - RoleBindingService
+            description: 当前登录者自己的权限码，供前端做按钮级显隐。只需登录。
+            operationId: RoleBindingService_GetMyPermissions
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.GetMyPermissionsResponse'
+    /v1/system/role-bindings/{role}:
+        get:
+            tags:
+                - RoleBindingService
+            operationId: RoleBindingService_GetRolePermissions
+            parameters:
+                - name: role
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.GetRolePermissionsResponse'
+        put:
+            tags:
+                - RoleBindingService
+            description: 全量覆盖某个角色的权限码集合，变更立即生效。
+            operationId: RoleBindingService_SetRolePermissions
+            parameters:
+                - name: role
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/eagle.access.v1.SetRolePermissionsRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.SetRolePermissionsResponse'
+    /v1/system/role-inheritances:
+        get:
+            tags:
+                - RoleBindingService
+            operationId: RoleBindingService_ListRoleInheritances
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.ListRoleInheritancesResponse'
+    /v1/system/role-inheritances/{child}/{parent}:
+        delete:
+            tags:
+                - RoleBindingService
+            operationId: RoleBindingService_DeleteRoleInheritance
+            parameters:
+                - name: child
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: parent
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: expectedVersion
+                  in: query
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/eagle.access.v1.DeleteRoleInheritanceResponse'
+components:
+    schemas:
+        eagle.access.v1.AddRoleInheritanceRequest:
+            type: object
+            properties:
+                child:
+                    type: string
+                parent:
+                    type: string
+                expectedVersion:
+                    type: string
+        eagle.access.v1.AddRoleInheritanceResponse:
+            type: object
+            properties:
+                policyVersion:
+                    type: string
+        eagle.access.v1.CreatePermissionRequest:
+            type: object
+            properties:
+                parentId:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                type:
+                    type: integer
+                    format: int32
+                path:
+                    type: string
+                component:
+                    type: string
+                icon:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                visible:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+        eagle.access.v1.CreatePermissionResponse:
+            type: object
+            properties:
+                permission:
+                    $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.access.v1.DeletePermissionResponse:
+            type: object
+            properties: {}
+        eagle.access.v1.DeleteRoleInheritanceResponse:
+            type: object
+            properties:
+                policyVersion:
+                    type: string
+        eagle.access.v1.GetMyMenusResponse:
+            type: object
+            properties:
+                menus:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.access.v1.Permission'
+                    description: 当前用户可见的目录与菜单（不含按钮），平铺返回
+                permissionCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: 当前用户的全部权限码，前端用于按钮级显隐
+        eagle.access.v1.GetMyPermissionsResponse:
+            type: object
+            properties:
+                roles:
+                    type: array
+                    items:
+                        type: string
+                    description: 当前登录者的角色（来自 Keycloak token）
+                permissionCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: 这些角色展开后的全部权限码（含继承）
+        eagle.access.v1.GetPermissionResponse:
+            type: object
+            properties:
+                permission:
+                    $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.access.v1.GetRolePermissionsResponse:
+            type: object
+            properties:
+                binding:
+                    $ref: '#/components/schemas/eagle.access.v1.RoleBinding'
+        eagle.access.v1.ListBoundRolesResponse:
+            type: object
+            properties:
+                bindings:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.access.v1.RoleBinding'
+                policyVersion:
+                    type: string
+        eagle.access.v1.ListPermissionsResponse:
+            type: object
+            properties:
+                permissions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.access.v1.ListRoleInheritancesResponse:
+            type: object
+            properties:
+                inheritances:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.access.v1.RoleInheritance'
+                policyVersion:
+                    type: string
+        eagle.access.v1.Permission:
+            type: object
+            properties:
+                id:
+                    type: string
+                parentId:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                    description: 权限码，如 system:user:add。目录/菜单可为空，按钮必填
+                type:
+                    type: integer
+                    description: 1=目录 2=菜单 3=按钮
+                    format: int32
+                path:
+                    type: string
+                component:
+                    type: string
+                icon:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                visible:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                revision:
+                    type: string
+                    description: 整棵权限树的版本，用于管理端乐观并发控制。
+        eagle.access.v1.RoleBinding:
+            type: object
+            properties:
+                role:
+                    type: string
+                    description: 带来源命名空间的角色键：realm:<role> 或 client:<client-id>:<role>
+                permissionCodes:
+                    type: array
+                    items:
+                        type: string
+                revision:
+                    type: string
+            description: RoleBinding 是一个角色及其被授予的权限码。
+        eagle.access.v1.RoleInheritance:
+            type: object
+            properties:
+                child:
+                    type: string
+                parent:
+                    type: string
+        eagle.access.v1.SetRolePermissionsRequest:
+            type: object
+            properties:
+                role:
+                    type: string
+                permissionCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: 全量覆盖。传空数组表示收回该角色的全部权限。
+                expectedVersion:
+                    type: string
+        eagle.access.v1.SetRolePermissionsResponse:
+            type: object
+            properties:
+                policyVersion:
+                    type: string
+        eagle.access.v1.UpdatePermissionRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                parentId:
+                    type: string
+                name:
+                    type: string
+                code:
+                    type: string
+                type:
+                    type: integer
+                    format: int32
+                path:
+                    type: string
+                component:
+                    type: string
+                icon:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                visible:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                expectedRevision:
+                    type: string
+        eagle.access.v1.UpdatePermissionResponse:
+            type: object
+            properties:
+                permission:
+                    $ref: '#/components/schemas/eagle.access.v1.Permission'
+        eagle.dictionary.v1.CreateDictDataRequest:
+            type: object
+            properties:
+                dictType:
+                    type: string
+                label:
+                    type: string
+                value:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                cssClass:
+                    type: string
+                isDefault:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.dictionary.v1.CreateDictDataResponse:
+            type: object
+            properties:
+                dictData:
+                    $ref: '#/components/schemas/eagle.dictionary.v1.DictData'
+        eagle.dictionary.v1.CreateDictTypeRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                type:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.dictionary.v1.CreateDictTypeResponse:
+            type: object
+            properties:
+                dictType:
+                    $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
+        eagle.dictionary.v1.DeleteDictDataResponse:
+            type: object
+            properties: {}
+        eagle.dictionary.v1.DeleteDictTypeResponse:
+            type: object
+            properties: {}
+        eagle.dictionary.v1.DictData:
+            type: object
+            properties:
+                id:
+                    type: string
+                dictType:
+                    type: string
+                label:
+                    type: string
+                value:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                cssClass:
+                    type: string
+                isDefault:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.dictionary.v1.DictType:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                type:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.dictionary.v1.GetDictDataByTypeResponse:
+            type: object
+            properties:
+                dictData:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.dictionary.v1.DictData'
+        eagle.dictionary.v1.ListDictDataResponse:
+            type: object
+            properties:
+                dictData:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.dictionary.v1.DictData'
+                total:
+                    type: string
+        eagle.dictionary.v1.ListDictTypesResponse:
+            type: object
+            properties:
+                dictTypes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
+                total:
+                    type: string
+        eagle.dictionary.v1.UpdateDictDataRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                label:
+                    type: string
+                value:
+                    type: string
+                sort:
+                    type: integer
+                    format: int32
+                cssClass:
+                    type: string
+                isDefault:
+                    type: boolean
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.dictionary.v1.UpdateDictDataResponse:
+            type: object
+            properties:
+                dictData:
+                    $ref: '#/components/schemas/eagle.dictionary.v1.DictData'
+        eagle.dictionary.v1.UpdateDictTypeRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                status:
+                    type: integer
+                    format: int32
+                remark:
+                    type: string
+        eagle.dictionary.v1.UpdateDictTypeResponse:
+            type: object
+            properties:
+                dictType:
+                    $ref: '#/components/schemas/eagle.dictionary.v1.DictType'
+        eagle.file.v1.DeleteFileResponse:
+            type: object
+            properties: {}
+        eagle.file.v1.DownloadFileResponse:
+            type: object
+            properties:
+                content:
+                    type: string
+        eagle.file.v1.File:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                contentType:
+                    type: string
+                size:
+                    type: string
+                sha256:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+        eagle.file.v1.GetFileResponse:
+            type: object
+            properties:
+                file:
+                    $ref: '#/components/schemas/eagle.file.v1.File'
+        eagle.file.v1.ListMyFilesResponse:
+            type: object
+            properties:
+                files:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.file.v1.File'
+                total:
+                    type: string
+        eagle.file.v1.UploadFileResponse:
+            type: object
+            properties:
+                file:
+                    $ref: '#/components/schemas/eagle.file.v1.File'
+        eagle.notification.v1.GetMyUnreadCountResponse:
+            type: object
+            properties:
+                count:
+                    type: string
+        eagle.notification.v1.ListMyNotificationsResponse:
+            type: object
+            properties:
+                notifications:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.notification.v1.Notification'
+                total:
+                    type: string
+        eagle.notification.v1.MarkAllNotificationsReadResponse:
+            type: object
+            properties:
+                updated:
+                    type: string
+        eagle.notification.v1.MarkNotificationReadResponse:
+            type: object
+            properties:
+                notification:
+                    $ref: '#/components/schemas/eagle.notification.v1.Notification'
+        eagle.notification.v1.Notification:
+            type: object
+            properties:
+                id:
+                    type: string
+                title:
+                    type: string
+                content:
+                    type: string
+                senderSubject:
+                    type: string
+                readAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+        eagle.notification.v1.SendNotificationRequest:
+            type: object
+            properties:
+                recipientSubject:
+                    type: string
+                title:
+                    type: string
+                content:
+                    type: string
+        eagle.notification.v1.SendNotificationResponse:
+            type: object
+            properties:
+                notification:
+                    $ref: '#/components/schemas/eagle.notification.v1.Notification'
+        eagle.order.v1.CreateOrderItem:
+            type: object
+            properties:
+                productId:
+                    type: string
+                quantity:
+                    type: integer
+                    format: int32
+        eagle.order.v1.CreateOrderRequest:
+            type: object
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.order.v1.CreateOrderItem'
+                idempotencyKey:
+                    type: string
+        eagle.order.v1.CreateOrderResponse:
+            type: object
+            properties:
+                order:
+                    $ref: '#/components/schemas/eagle.order.v1.Order'
+        eagle.order.v1.GetMyOrderResponse:
+            type: object
+            properties:
+                order:
+                    $ref: '#/components/schemas/eagle.order.v1.Order'
+        eagle.order.v1.ListMyOrdersResponse:
+            type: object
+            properties:
+                orders:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.order.v1.Order'
+                total:
+                    type: string
+        eagle.order.v1.Order:
+            type: object
+            properties:
+                id:
+                    type: string
+                status:
+                    type: integer
+                    format: enum
+                totalCents:
+                    type: string
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.order.v1.OrderItem'
+                createdAt:
+                    type: string
+                    format: date-time
+        eagle.order.v1.OrderItem:
+            type: object
+            properties:
+                productId:
+                    type: string
+                productSku:
+                    type: string
+                productName:
+                    type: string
+                unitPriceCents:
+                    type: string
+                quantity:
+                    type: integer
+                    format: int32
+                subtotalCents:
+                    type: string
+        eagle.product.v1.CreateProductRequest:
+            type: object
+            properties:
+                sku:
+                    type: string
+                name:
+                    type: string
+                description:
+                    type: string
+                priceCents:
+                    type: string
+                active:
+                    type: boolean
+        eagle.product.v1.CreateProductResponse:
+            type: object
+            properties:
+                product:
+                    $ref: '#/components/schemas/eagle.product.v1.Product'
+        eagle.product.v1.DeleteProductResponse:
+            type: object
+            properties: {}
+        eagle.product.v1.GetProductResponse:
+            type: object
+            properties:
+                product:
+                    $ref: '#/components/schemas/eagle.product.v1.Product'
+        eagle.product.v1.ListProductsResponse:
+            type: object
+            properties:
+                products:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/eagle.product.v1.Product'
+                total:
+                    type: string
+        eagle.product.v1.Product:
+            type: object
+            properties:
+                id:
+                    type: string
+                sku:
+                    type: string
+                name:
+                    type: string
+                description:
+                    type: string
+                priceCents:
+                    type: string
+                active:
+                    type: boolean
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+        eagle.product.v1.UpdateProductRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                description:
+                    type: string
+                priceCents:
+                    type: string
+                active:
+                    type: boolean
+        eagle.product.v1.UpdateProductResponse:
+            type: object
+            properties:
+                product:
+                    $ref: '#/components/schemas/eagle.product.v1.Product'
+tags:
+    - name: DictService
+      description: |-
+        DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，
+         前端下拉框、状态标签统一从这里取，避免枚举值散落在各处代码里。
+    - name: FileService
+      description: |-
+        FileService provides the small-file workflow used by the foundation. HTTP
+         uploads and downloads use raw bodies rather than JSON/base64 encoding.
+    - name: NotificationService
+      description: |-
+        NotificationService is the in-app notification boundary. External email,
+         SMS, and push delivery are intentionally not part of the foundation yet.
+    - name: OrderService
+    - name: PermissionService
+    - name: ProductService
+    - name: RoleBindingService
+      description: |-
+        RoleBindingService 管理「角色 → 权限码」的映射，即 Casbin 的 p 策略。
+
+         角色本身不在这里创建或删除——它由 Keycloak 维护，随 token 的
+         realm_access.roles 下发。本服务只回答「这个角色能调哪些接口」。
+
+         这样切分的原因：把用户到角色的归属也放进本库，就等于与 Keycloak
+         双写同一份数据，必然漂移；而把权限映射放进 Keycloak，则每次
+         授权判定都要跨网络调用，且权限配置只能在 Keycloak 后台改。

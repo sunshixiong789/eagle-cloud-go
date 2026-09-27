@@ -1,0 +1,47 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: eagle
+spec:
+  gatewayClassName: envoy
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: api.example.com
+      allowedRoutes: {namespaces: {from: Same}}
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: api.example.com
+      tls:
+        mode: Terminate
+        certificateRefs: [{kind: Secret, name: eagle-tls}]
+      allowedRoutes: {namespaces: {from: Same}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: eagle-http-redirect
+spec:
+  parentRefs: [{name: eagle, sectionName: http}]
+  hostnames: [api.example.com]
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect: {scheme: https, statusCode: 301}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: eagle-api
+spec:
+  parentRefs: [{name: eagle, sectionName: https}]
+  hostnames: [api.example.com]
+  rules:
+    - matches: [{path: {type: PathPrefix, value: /v1/products}}]
+      backendRefs: [{name: product, port: 8000}]
+    - matches: [{path: {type: PathPrefix, value: /v1/orders}}]
+      backendRefs: [{name: order, port: 8000}]
+    - matches: [{path: {type: PathPrefix, value: /v1/system}}]
+      backendRefs: [{name: admin, port: 8000}]

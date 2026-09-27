@@ -1,0 +1,266 @@
+syntax = "proto3";
+
+package eagle.dictionary.v1;
+
+import "buf/validate/validate.proto";
+import "eagle/annotations/v1/perm.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/dictionary/v1;dictionaryv1";
+
+// DictService 管理数据字典。字典类型（sys_common_status）下挂若干字典项，
+// 前端下拉框、状态标签统一从这里取，避免枚举值散落在各处代码里。
+service DictService {
+  rpc CreateDictType(CreateDictTypeRequest) returns (CreateDictTypeResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/dict/types"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:dict:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc ListDictTypes(ListDictTypesRequest) returns (ListDictTypesResponse) {
+    option (google.api.http) = {get: "/v1/system/dict/types"};
+    option (eagle.annotations.v1.perm) = "system:dict:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc UpdateDictType(UpdateDictTypeRequest) returns (UpdateDictTypeResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/dict/types/{id}"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:dict:edit";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc DeleteDictType(DeleteDictTypeRequest) returns (DeleteDictTypeResponse) {
+    option (google.api.http) = {delete: "/v1/system/dict/types/{id}"};
+    option (eagle.annotations.v1.perm) = "system:dict:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc CreateDictData(CreateDictDataRequest) returns (CreateDictDataResponse) {
+    option (google.api.http) = {
+      post: "/v1/system/dict/data"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:dict:add";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc ListDictData(ListDictDataRequest) returns (ListDictDataResponse) {
+    option (google.api.http) = {get: "/v1/system/dict/data"};
+    option (eagle.annotations.v1.perm) = "system:dict:list";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc UpdateDictData(UpdateDictDataRequest) returns (UpdateDictDataResponse) {
+    option (google.api.http) = {
+      put: "/v1/system/dict/data/{id}"
+      body: "*"
+    };
+    option (eagle.annotations.v1.perm) = "system:dict:edit";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  rpc DeleteDictData(DeleteDictDataRequest) returns (DeleteDictDataResponse) {
+    option (google.api.http) = {delete: "/v1/system/dict/data/{id}"};
+    option (eagle.annotations.v1.perm) = "system:dict:remove";
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_PERMISSION_REQUIRED;
+  }
+
+  // 按类型取字典项，供前端渲染下拉框。任何登录用户都要用，
+  // 所以不挂权限码，只校验登录态；结果直接读取权威数据库。
+  rpc GetDictDataByType(GetDictDataByTypeRequest) returns (GetDictDataByTypeResponse) {
+    option (google.api.http) = {get: "/v1/system/dict/data/type/{dict_type}"};
+    option (eagle.annotations.v1.access) = ACCESS_LEVEL_AUTHENTICATED;
+  }
+}
+
+message DictType {
+  int64 id = 1;
+  string name = 2;
+  string type = 3;
+  int32 status = 4;
+  string remark = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message DictData {
+  int64 id = 1;
+  string dict_type = 2;
+  string label = 3;
+  string value = 4;
+  int32 sort = 5;
+  string css_class = 6;
+  bool is_default = 7;
+  int32 status = 8;
+  string remark = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message CreateDictTypeRequest {
+  string name = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  string type = 2 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 64
+    pattern: "^[a-z][a-z0-9_]*$"
+  }];
+  int32 status = 3 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 4 [(buf.validate.field).string.max_len = 512];
+}
+
+message CreateDictTypeResponse {
+  DictType dict_type = 1;
+}
+
+message ListDictTypesRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+  string keyword = 3 [(buf.validate.field).string.max_len = 64];
+  optional int32 status = 4 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+}
+
+message ListDictTypesResponse {
+  repeated DictType dict_types = 1;
+  int64 total = 2;
+}
+
+message UpdateDictTypeRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string name = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+  int32 status = 3 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 4 [(buf.validate.field).string.max_len = 512];
+}
+
+message UpdateDictTypeResponse {
+  DictType dict_type = 1;
+}
+
+message DeleteDictTypeRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteDictTypeResponse {}
+
+message CreateDictDataRequest {
+  string dict_type = 1 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 64
+  }];
+  string label = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  string value = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  int32 sort = 4;
+  string css_class = 5 [(buf.validate.field).string.max_len = 64];
+  bool is_default = 6;
+  int32 status = 7 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 8 [(buf.validate.field).string.max_len = 512];
+}
+
+message CreateDictDataResponse {
+  DictData dict_data = 1;
+}
+
+message ListDictDataRequest {
+  int32 page = 1 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 2 [(buf.validate.field).int32 = {
+    gte: 0
+    lte: 200
+  }];
+  optional string dict_type = 3 [(buf.validate.field).string.max_len = 64];
+  string keyword = 4 [(buf.validate.field).string.max_len = 64];
+  optional int32 status = 5 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+}
+
+message ListDictDataResponse {
+  repeated DictData dict_data = 1;
+  int64 total = 2;
+}
+
+message UpdateDictDataRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+  string label = 2 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  string value = 3 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 128
+  }];
+  int32 sort = 4;
+  string css_class = 5 [(buf.validate.field).string.max_len = 64];
+  bool is_default = 6;
+  int32 status = 7 [(buf.validate.field).int32 = {
+    in: [
+      0,
+      1
+    ]
+  }];
+  string remark = 8 [(buf.validate.field).string.max_len = 512];
+}
+
+message UpdateDictDataResponse {
+  DictData dict_data = 1;
+}
+
+message DeleteDictDataRequest {
+  int64 id = 1 [(buf.validate.field).int64.gt = 0];
+}
+
+message DeleteDictDataResponse {}
+
+message GetDictDataByTypeRequest {
+  string dict_type = 1 [(buf.validate.field).string = {
+    min_len: 2
+    max_len: 64
+  }];
+}
+
+message GetDictDataByTypeResponse {
+  repeated DictData dict_data = 1;
+}

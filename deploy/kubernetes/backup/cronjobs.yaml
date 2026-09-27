@@ -1,0 +1,140 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: admin-database-backup
+spec:
+  schedule: "17 1 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+          initContainers:
+            - name: dump-and-verify
+              image: postgres:17-alpine
+              command: ["/bin/sh", "-ec"]
+              args: ["pg_dump --format=custom --file=/backup/database.dump \"$DATABASE_URL\" && pg_restore --list /backup/database.dump >/dev/null"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: eagle-runtime, key: admin-database-dsn}}
+              resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 999}
+              volumeMounts: [{name: backup, mountPath: /backup}]
+          containers:
+            - name: upload
+              image: amazon/aws-cli:2.27.41
+              command: ["/bin/sh", "-ec"]
+              args: ["aws --endpoint-url \"$S3_ENDPOINT\" s3 cp /backup/database.dump \"s3://$S3_BUCKET/$S3_PREFIX/admin/$(date -u +%Y/%m/%d)/admin-$(date -u +%Y%m%dT%H%M%SZ).dump\" --sse AES256"]
+              envFrom: [{configMapRef: {name: eagle-backup}}]
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: access-key}}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: secret-key}}
+              resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {cpu: 500m, memory: 256Mi}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 1000}
+              volumeMounts: [{name: backup, mountPath: /backup, readOnly: true}]
+          volumes: [{name: backup, emptyDir: {sizeLimit: 10Gi}}]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: product-database-backup
+spec:
+  schedule: "27 1 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+          initContainers:
+            - name: dump-and-verify
+              image: postgres:17-alpine
+              command: ["/bin/sh", "-ec"]
+              args: ["pg_dump --format=custom --file=/backup/database.dump \"$DATABASE_URL\" && pg_restore --list /backup/database.dump >/dev/null"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: eagle-runtime, key: product-database-dsn}}
+              resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 999}
+              volumeMounts: [{name: backup, mountPath: /backup}]
+          containers:
+            - name: upload
+              image: amazon/aws-cli:2.27.41
+              command: ["/bin/sh", "-ec"]
+              args: ["aws --endpoint-url \"$S3_ENDPOINT\" s3 cp /backup/database.dump \"s3://$S3_BUCKET/$S3_PREFIX/product/$(date -u +%Y/%m/%d)/product-$(date -u +%Y%m%dT%H%M%SZ).dump\" --sse AES256"]
+              envFrom: [{configMapRef: {name: eagle-backup}}]
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: access-key}}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: secret-key}}
+              resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {cpu: 500m, memory: 256Mi}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 1000}
+              volumeMounts: [{name: backup, mountPath: /backup, readOnly: true}]
+          volumes: [{name: backup, emptyDir: {sizeLimit: 10Gi}}]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: order-database-backup
+spec:
+  schedule: "37 1 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+          initContainers:
+            - name: dump-and-verify
+              image: postgres:17-alpine
+              command: ["/bin/sh", "-ec"]
+              args: ["pg_dump --format=custom --file=/backup/database.dump \"$DATABASE_URL\" && pg_restore --list /backup/database.dump >/dev/null"]
+              env:
+                - name: DATABASE_URL
+                  valueFrom: {secretKeyRef: {name: eagle-runtime, key: order-database-dsn}}
+              resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {cpu: "1", memory: 1Gi}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 999}
+              volumeMounts: [{name: backup, mountPath: /backup}]
+          containers:
+            - name: upload
+              image: amazon/aws-cli:2.27.41
+              command: ["/bin/sh", "-ec"]
+              args: ["aws --endpoint-url \"$S3_ENDPOINT\" s3 cp /backup/database.dump \"s3://$S3_BUCKET/$S3_PREFIX/order/$(date -u +%Y/%m/%d)/order-$(date -u +%Y%m%dT%H%M%SZ).dump\" --sse AES256"]
+              envFrom: [{configMapRef: {name: eagle-backup}}]
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: access-key}}
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom: {secretKeyRef: {name: eagle-backup-credentials, key: secret-key}}
+              resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {cpu: 500m, memory: 256Mi}}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true, runAsUser: 1000}
+              volumeMounts: [{name: backup, mountPath: /backup, readOnly: true}]
+          volumes: [{name: backup, emptyDir: {sizeLimit: 10Gi}}]

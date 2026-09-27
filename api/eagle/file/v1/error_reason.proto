@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package eagle.file.v1;
+
+option go_package = "github.com/eagle-go/eagle/api/eagle/file/v1;filev1";
+
+// ErrorReason identifies file-module failures independently of transport status codes.
+enum ErrorReason {
+  ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_FILE_NOT_FOUND = 50;
+  ERROR_REASON_FILE_TOO_LARGE = 51;
+  ERROR_REASON_INVALID_FILE_NAME = 52;
+  ERROR_REASON_INVALID_FILE_CONTENT_TYPE = 53;
+}

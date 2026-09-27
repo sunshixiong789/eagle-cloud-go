@@ -1,0 +1,17 @@
+# 三个 K3s server 节点必须使用相同的关键配置。复制到每台服务器的
+# /etc/rancher/k3s/config.yaml，并先替换 K3S_API_ENDPOINT。
+write-kubeconfig-mode: "0600"
+token-file: /etc/rancher/k3s/token
+tls-san:
+  - K3S_API_ENDPOINT
+
+# 仓库使用 Gateway API + Envoy Gateway。保留 ServiceLB，让三台节点
+# 都能承接网关 80/443；不要同时安装 Traefik 占用相同端口。
+disable:
+  - traefik
+
+secrets-encryption: true
+etcd-snapshot-compress: true
+etcd-snapshot-schedule-cron: "0 */6 * * *"
+etcd-snapshot-retention: 28
+
