@@ -59,7 +59,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
       - name: Scan amd64 candidate
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
         env:
           TRIVY_PLATFORM: linux/amd64
           TRIVY_USERNAME: ${{ github.actor }}
@@ -70,7 +70,7 @@ jobs:
           exit-code: '1'
           ignore-unfixed: false
       - name: Scan arm64 candidate
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
         env:
           TRIVY_PLATFORM: linux/arm64
           TRIVY_USERNAME: ${{ github.actor }}
