@@ -29,12 +29,15 @@ func (r *repository) Create(ctx context.Context, value *domain.Order) (*domain.O
 	defer func() { _ = tx.Rollback() }()
 	row, err := tx.PurchaseOrder.Create().
 		SetID(value.ID()).SetOwnerSubject(value.OwnerSubject()).SetIdempotencyKey(value.IdempotencyKey()).SetStatus(value.Status()).
-		SetTotalCents(value.TotalCents()).Save(ctx)
+		SetRequestFingerprint(value.RequestFingerprint()).SetTotalCents(value.TotalCents()).Save(ctx)
 	if err != nil {
 		if platformdb.IsUniqueViolation(err) {
 			_ = tx.Rollback()
-			existing, lookupErr := r.getByIdempotencyKey(ctx, value.OwnerSubject(), value.IdempotencyKey())
+			existing, lookupErr := r.FindCreated(ctx, value.OwnerSubject(), value.IdempotencyKey())
 			if lookupErr == nil {
+				if existing.RequestFingerprint() != value.RequestFingerprint() {
+					return nil, domain.ErrIdempotencyConflict
+				}
 				return existing, nil
 			}
 			return nil, fmt.Errorf("resolve idempotent order after conflict: %w", lookupErr)
@@ -103,7 +106,7 @@ func (r *repository) GetOwned(ctx context.Context, owner, id string) (*domain.Or
 	return r.withItems(ctx, row)
 }
 
-func (r *repository) getByIdempotencyKey(ctx context.Context, owner, key string) (*domain.Order, error) {
+func (r *repository) FindCreated(ctx context.Context, owner, key string) (*domain.Order, error) {
 	row, err := r.db.Client().PurchaseOrder.Query().Where(
 		purchaseorder.OwnerSubjectEQ(owner), purchaseorder.IdempotencyKeyEQ(key),
 	).Only(ctx)
@@ -179,6 +182,11 @@ func toDomainOrder(row *ent.PurchaseOrder, items []domain.Item) (*domain.Order, 
 	})
 	if err != nil {
 		return nil, fmt.Errorf("rehydrate order %s: %w", row.ID, err)
+	}
+	// Empty hashes belong to orders created before the expand migration. Their immutable
+	// item snapshots still preserve the complete request and supply the same fingerprint.
+	if row.RequestFingerprint != "" && row.RequestFingerprint != value.RequestFingerprint() {
+		return nil, fmt.Errorf("order %s request fingerprint does not match items", row.ID)
 	}
 	return value, nil
 }

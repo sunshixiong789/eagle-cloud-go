@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -28,7 +29,7 @@ func newTestAuthorizer(t *testing.T, client snapshotClient) *Authorizer {
 	if err != nil {
 		t.Fatalf("NewEnforcer: %v", err)
 	}
-	return &Authorizer{client: client, enforcer: enforcer, maxAttempts: 1}
+	return &Authorizer{client: client, enforcer: enforcer, maxAttempts: 1, maxStaleness: 15 * time.Second}
 }
 
 func TestAuthorizerRefreshesSnapshotAndDecidesLocally(t *testing.T) {
@@ -89,5 +90,31 @@ func TestAuthorizerRejectsMalformedSnapshotWithoutReplacingPolicy(t *testing.T) 
 	allowed, err := authorizer.AllowContext(context.Background(), []string{"role"}, "product:product:list")
 	if err != nil || !allowed {
 		t.Fatalf("malformed snapshot replaced valid policy: %v, %v", allowed, err)
+	}
+}
+
+func TestExpiredSnapshotDeniesUntilFreshSnapshotArrives(t *testing.T) {
+	stub := &stubSnapshotClient{response: &accessv1.GetPolicySnapshotResponse{PolicyVersion: 2, Rules: []*accessv1.PolicyRule{{Ptype: "p", Values: []string{"role", "product:product:add"}}}}}
+	a := newTestAuthorizer(t, stub)
+	if err := a.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	a.lastRefresh.Store(time.Now().Add(-time.Minute).UnixNano())
+	if allowed, err := a.AllowContext(context.Background(), []string{"role"}, "product:product:add"); allowed || err == nil {
+		t.Fatalf("expired snapshot accepted: %v %v", allowed, err)
+	}
+	stub.response.PolicyVersion = 1
+	if err := a.Refresh(context.Background()); err == nil {
+		t.Fatal("regressed version refreshed expiry")
+	}
+	if allowed, _ := a.AllowContext(context.Background(), []string{"role"}, "product:product:add"); allowed {
+		t.Fatal("regressed version resurrected stale grant")
+	}
+	stub.response.PolicyVersion = 2
+	if err := a.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if allowed, err := a.AllowContext(context.Background(), []string{"role"}, "product:product:add"); !allowed || err != nil {
+		t.Fatalf("fresh snapshot rejected: %v %v", allowed, err)
 	}
 }

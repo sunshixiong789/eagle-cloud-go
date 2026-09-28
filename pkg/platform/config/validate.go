@@ -122,12 +122,23 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	if required.AuthorizationUpstream && (upstream.GetAuthorizationRefreshInterval() == nil || upstream.GetAuthorizationRefreshInterval().AsDuration() <= 0) {
 		errs = append(errs, errors.New("upstream.authorization_refresh_interval must be positive"))
 	}
-	if required.Redis {
-		if !redis.GetEnabled() || strings.TrimSpace(redis.GetAddress()) == "" {
-			errs = append(errs, errors.New("cache.redis must be enabled and address is required"))
+	if required.AuthorizationUpstream && (upstream.GetAuthorizationMaxStaleness() == nil || upstream.GetAuthorizationMaxStaleness().AsDuration() < upstream.GetAuthorizationRefreshInterval().AsDuration()) {
+		errs = append(errs, errors.New("upstream.authorization_max_staleness must be >= authorization_refresh_interval"))
+	}
+	if required.Redis && redis.GetEnabled() {
+		if strings.TrimSpace(redis.GetAddress()) == "" {
+			errs = append(errs, errors.New("cache.redis.address is required when enabled"))
 		}
 		if redis.GetTtl() == nil || redis.GetTtl().AsDuration() <= 0 {
 			errs = append(errs, errors.New("cache.redis.ttl must be positive"))
+		}
+	}
+	if required.Redis && redis.GetEnabled() {
+		if redis.GetOperationTimeout() == nil || redis.GetOperationTimeout().AsDuration() <= 0 {
+			errs = append(errs, errors.New("cache.redis.operation_timeout must be positive"))
+		}
+		if !redis.GetTlsEnabled() && (redis.GetTlsCaFile() != "" || redis.GetTlsServerName() != "") {
+			errs = append(errs, errors.New("cache.redis TLS options require tls_enabled"))
 		}
 	}
 	if required.RabbitMQ {

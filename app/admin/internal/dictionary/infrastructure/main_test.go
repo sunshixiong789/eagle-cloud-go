@@ -14,14 +14,19 @@ import (
 var testDB *platformdb.Database
 
 func TestMain(m *testing.M) {
+	os.Exit(runTests(m))
+}
+
+// Return before os.Exit so database and process cleanup always run.
+func runTests(m *testing.M) int {
 	flag.Parse()
 	if testing.Short() {
-		os.Exit(m.Run())
+		return m.Run()
 	}
 	pg, err := testkit.StartPostgres("dictionary", "eagle_dictionary_test")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = pg.Close() }()
 	db, cleanup, err := platformdb.Open(&config.Data{Database: &config.Data_Database{
@@ -29,9 +34,9 @@ func TestMain(m *testing.M) {
 	}})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 	testDB = db
 	defer cleanup()
-	os.Exit(m.Run())
+	return m.Run()
 }

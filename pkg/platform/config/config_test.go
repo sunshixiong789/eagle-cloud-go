@@ -4,10 +4,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	kratosconfig "github.com/go-kratos/kratos/v3/config"
 	configenv "github.com/go-kratos/kratos/v3/config/env"
 	"github.com/go-kratos/kratos/v3/config/file"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	appconfig "github.com/eagle-go/eagle/pkg/platform/config"
 )
@@ -188,5 +190,31 @@ func TestObservabilityConfigIsSane(t *testing.T) {
 	bc := loadConfig(t, "admin")
 	if o.GetMetricsAddr() == bc.GetServer().GetHttp().GetAddr() {
 		t.Error("metrics_addr 与业务 HTTP 端口相同，指标端点会绕过鉴权暴露业务接口")
+	}
+}
+
+func TestProductFailurePolicyConfiguration(t *testing.T) {
+	bc := loadConfig(t, "product")
+	if bc.GetUpstream().GetAuthorizationMaxStaleness().AsDuration() != 15*time.Second {
+		t.Fatal("unexpected policy lifetime")
+	}
+	bc.Upstream.AuthorizationMaxStaleness = durationpb.New(time.Second)
+	if err := appconfig.Validate(bc, appconfig.Requirements{AuthorizationUpstream: true}); err == nil {
+		t.Fatal("accepted policy lifetime shorter than refresh")
+	}
+	bc.Cache.Redis.Enabled = false
+	bc.Cache.Redis.Address = ""
+	if err := appconfig.Validate(bc, appconfig.Requirements{Redis: true}); err != nil {
+		t.Fatalf("disabled optional cache: %v", err)
+	}
+	bc.Cache.Redis.Enabled = true
+	bc.Cache.Redis.Address = "localhost:6379"
+	bc.Cache.Redis.TlsCaFile = "/tmp/ca.pem"
+	if err := appconfig.Validate(bc, appconfig.Requirements{Redis: true}); err == nil {
+		t.Fatal("accepted CA without TLS")
+	}
+	bc.Cache.Redis.TlsEnabled = true
+	if err := appconfig.Validate(bc, appconfig.Requirements{Redis: true}); err != nil {
+		t.Fatal(err)
 	}
 }

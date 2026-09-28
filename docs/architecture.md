@@ -57,7 +57,8 @@ DDD 是依赖边界和不变量保护，不是代码数量指标。字典等纯 
 
 订单不会读取商品表，也不会把客户端报价当真。创建订单时通过 product gRPC 批量读取商品，将 SKU、名称和单价保存为订单快照，再只在订单库内提交一次事务。商品以后改名或改价不会篡改历史订单。
 
-订单创建要求调用方提供 owner 范围内的幂等键；数据库唯一约束保证重试只得到同一订单。
+订单创建要求调用方提供 owner 范围内的幂等键；先按主体和幂等键恢复已完成订单，再访问商品服务；同键不同请求返回冲突。
+数据库唯一约束与事务内请求摘要保证并发重试只得到同一订单。
 同一事务会写入带独立 `event_id` 的 `event_outbox`，事件由包含 producer、schema version、
 aggregate、traceparent 的统一 envelope 承载，后台 relay 经 RabbitMQ publisher confirm 发布
 `OrderCreatedV1`。admin 的通知消费者先校验 envelope 和 payload，再在同一事务内写
@@ -78,8 +79,9 @@ aggregate、traceparent 的统一 envelope 承载，后台 relay 经 RabbitMQ pu
 - 所有服务本地校验 JWT，admin 不成为认证代理。
 - 权限要求声明在 proto 的 access / perm 上，handler 不写鉴权分支。
 - admin 是策略唯一写入方；其他服务不连接权限库，只读取版本化快照并原子替换本地 Casbin 模型。
-- 请求路径不做远程授权 RPC。刷新失败时保留上一份有效快照；超过三个刷新周期会使 readiness 失败，
-  但不会用半份策略或空策略覆盖已有判定状态。首次启动无法取得快照则 fail closed 并拒绝启动。
+- 请求路径不做远程授权 RPC。刷新失败时保留上一份有效快照；最大陈旧时间独立配置（默认 15 秒），过期后在请求判定中拒绝权限请求。
+  readiness 不因快照过期而失败，内部商品查询仍受服务身份白名单保护，从而隔离控制面故障。
+  不会用半份策略或空策略覆盖已有判定状态。首次启动无法取得快照则 fail closed 并拒绝启动。
 - admin 的授权 gRPC 只读，不提供策略写接口；`GetPolicySnapshot`、`CheckPermission` 与
   `BatchGetProducts` 是 `INTERNAL` RPC，调用方必须携带 Keycloak
   `client_credentials` 服务令牌。
@@ -132,3 +134,14 @@ HPA、PDB 与 NetworkPolicy。一次性迁移模板独立位于 `deploy/kubernet
 pkg 只放无业务语义、能被任意服务使用的技术原语，例如 JWT 验签、授权中间件、健康检查、配置、进程生命周期和传输运行时。业务模型不能进 pkg，服务也不能 import 其他服务拥有的模块；跨服务只 import `api` 契约。
 
 这些约束由 tests/architecture/dependencies_test.go 持续检查。
+
+## 商品缓存一致性
+
+商品写入提交后只做缓存失效，不把写响应直接回填。缓存未命中时取得随机回填令牌，
+数据库读取结束后通过 Lua 比较令牌再写缓存。写后失效、缓存过期或驱逐都会使旧令牌失效，
+防止删除后复活和旧查询覆盖新结果，不依赖跨机器时间戳精度。
+
+Redis 故障时启动和请求回退 PostgreSQL；每个缓存操作独立限时。写后失效失败时仍可能读到旧值，
+上界受缓存 TTL 控制（默认 60 秒），这是查询缓存的显式最终一致性约定。
+价格决策所用的内部批量商品查询始终直读数据库。滚动部署升级缓存键空间时，旧实例仍可能在 TTL 内返回旧值。
+需要强一致读取的业务应直接通过仓储查询，不能复用缓存查询作为强一致性保证。

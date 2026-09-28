@@ -34,7 +34,7 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-也可以在发布平台手动触发 workflow 并提供唯一版本号。环境仓库必须使用 workflow 输出的
+也可以手动触发 workflow，以 `sha-<commit>` 为版本；从 tag 触发时使用 tag 版本。环境仓库必须使用 workflow 输出的
 镜像 digest，例如 `ghcr.io/example/eagle/admin@sha256:...`，不要使用 `stable`、`staging`
 或 `latest` 等可变标签。仓库 overlay 中的仓库名和标签仅为可渲染示例，不能直接用于生产。
 

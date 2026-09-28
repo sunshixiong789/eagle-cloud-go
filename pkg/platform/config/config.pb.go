@@ -143,8 +143,11 @@ type Upstream struct {
 	RetryBackoff          *durationpb.Duration   `protobuf:"bytes,5,opt,name=retry_backoff,json=retryBackoff,proto3" json:"retry_backoff,omitempty"`
 	// Resource services periodically replace their local authorization snapshot.
 	AuthorizationRefreshInterval *durationpb.Duration `protobuf:"bytes,6,opt,name=authorization_refresh_interval,json=authorizationRefreshInterval,proto3" json:"authorization_refresh_interval,omitempty"`
-	unknownFields                protoimpl.UnknownFields
-	sizeCache                    protoimpl.SizeCache
+	// Expired snapshots deny permission-protected requests; they do not remove
+	// internal/public endpoints from service discovery.
+	AuthorizationMaxStaleness *durationpb.Duration `protobuf:"bytes,7,opt,name=authorization_max_staleness,json=authorizationMaxStaleness,proto3" json:"authorization_max_staleness,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *Upstream) Reset() {
@@ -215,6 +218,13 @@ func (x *Upstream) GetRetryBackoff() *durationpb.Duration {
 func (x *Upstream) GetAuthorizationRefreshInterval() *durationpb.Duration {
 	if x != nil {
 		return x.AuthorizationRefreshInterval
+	}
+	return nil
+}
+
+func (x *Upstream) GetAuthorizationMaxStaleness() *durationpb.Duration {
+	if x != nil {
+		return x.AuthorizationMaxStaleness
 	}
 	return nil
 }
@@ -806,15 +816,19 @@ func (x *File_S3) GetUseSsl() bool {
 }
 
 type Cache_Redis struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
-	Password      string                 `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
-	Database      int32                  `protobuf:"varint,5,opt,name=database,proto3" json:"database,omitempty"`
-	Ttl           *durationpb.Duration   `protobuf:"bytes,6,opt,name=ttl,proto3" json:"ttl,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Enabled          bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Address          string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Username         string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	Password         string                 `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
+	Database         int32                  `protobuf:"varint,5,opt,name=database,proto3" json:"database,omitempty"`
+	Ttl              *durationpb.Duration   `protobuf:"bytes,6,opt,name=ttl,proto3" json:"ttl,omitempty"`
+	TlsEnabled       bool                   `protobuf:"varint,7,opt,name=tls_enabled,json=tlsEnabled,proto3" json:"tls_enabled,omitempty"`
+	TlsCaFile        string                 `protobuf:"bytes,8,opt,name=tls_ca_file,json=tlsCaFile,proto3" json:"tls_ca_file,omitempty"`
+	TlsServerName    string                 `protobuf:"bytes,9,opt,name=tls_server_name,json=tlsServerName,proto3" json:"tls_server_name,omitempty"`
+	OperationTimeout *durationpb.Duration   `protobuf:"bytes,10,opt,name=operation_timeout,json=operationTimeout,proto3" json:"operation_timeout,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Cache_Redis) Reset() {
@@ -885,6 +899,34 @@ func (x *Cache_Redis) GetDatabase() int32 {
 func (x *Cache_Redis) GetTtl() *durationpb.Duration {
 	if x != nil {
 		return x.Ttl
+	}
+	return nil
+}
+
+func (x *Cache_Redis) GetTlsEnabled() bool {
+	if x != nil {
+		return x.TlsEnabled
+	}
+	return false
+}
+
+func (x *Cache_Redis) GetTlsCaFile() string {
+	if x != nil {
+		return x.TlsCaFile
+	}
+	return ""
+}
+
+func (x *Cache_Redis) GetTlsServerName() string {
+	if x != nil {
+		return x.TlsServerName
+	}
+	return ""
+}
+
+func (x *Cache_Redis) GetOperationTimeout() *durationpb.Duration {
+	if x != nil {
+		return x.OperationTimeout
 	}
 	return nil
 }
@@ -1204,14 +1246,15 @@ const file_config_proto_rawDesc = "" +
 	"\bupstream\x18\x06 \x01(\v2\x1f.eagle.platform.config.UpstreamR\bupstream\x122\n" +
 	"\x05cache\x18\a \x01(\v2\x1c.eagle.platform.config.CacheR\x05cache\x12>\n" +
 	"\tmessaging\x18\b \x01(\v2 .eagle.platform.config.MessagingR\tmessaging\x12E\n" +
-	"\fservice_auth\x18\t \x01(\v2\".eagle.platform.config.ServiceAuthR\vserviceAuth\"\xe5\x02\n" +
+	"\fservice_auth\x18\t \x01(\v2\".eagle.platform.config.ServiceAuthR\vserviceAuth\"\xc0\x03\n" +
 	"\bUpstream\x125\n" +
 	"\x16authorization_endpoint\x18\x01 \x01(\tR\x15authorizationEndpoint\x12)\n" +
 	"\x10product_endpoint\x18\x02 \x01(\tR\x0fproductEndpoint\x123\n" +
 	"\atimeout\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12!\n" +
 	"\fmax_attempts\x18\x04 \x01(\x05R\vmaxAttempts\x12>\n" +
 	"\rretry_backoff\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\fretryBackoff\x12_\n" +
-	"\x1eauthorization_refresh_interval\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x1cauthorizationRefreshInterval\"\xbf\x02\n" +
+	"\x1eauthorization_refresh_interval\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x1cauthorizationRefreshInterval\x12Y\n" +
+	"\x1bauthorization_max_staleness\x18\a \x01(\v2\x19.google.protobuf.DurationR\x19authorizationMaxStaleness\"\xbf\x02\n" +
 	"\x04File\x12\x1a\n" +
 	"\bprovider\x18\x03 \x01(\tR\bprovider\x12\x1b\n" +
 	"\tlocal_dir\x18\x01 \x01(\tR\blocalDir\x12$\n" +
@@ -1225,16 +1268,22 @@ const file_config_proto_rawDesc = "" +
 	"access_key\x18\x04 \x01(\tR\taccessKey\x12\x1d\n" +
 	"\n" +
 	"secret_key\x18\x05 \x01(\tR\tsecretKey\x12\x17\n" +
-	"\ause_ssl\x18\x06 \x01(\bR\x06useSsl\"\x80\x02\n" +
+	"\ause_ssl\x18\x06 \x01(\bR\x06useSsl\"\xb1\x03\n" +
 	"\x05Cache\x128\n" +
-	"\x05redis\x18\x01 \x01(\v2\".eagle.platform.config.Cache.RedisR\x05redis\x1a\xbc\x01\n" +
+	"\x05redis\x18\x01 \x01(\v2\".eagle.platform.config.Cache.RedisR\x05redis\x1a\xed\x02\n" +
 	"\x05Redis\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x04 \x01(\tR\bpassword\x12\x1a\n" +
 	"\bdatabase\x18\x05 \x01(\x05R\bdatabase\x12+\n" +
-	"\x03ttl\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\"\xa4\x03\n" +
+	"\x03ttl\x18\x06 \x01(\v2\x19.google.protobuf.DurationR\x03ttl\x12\x1f\n" +
+	"\vtls_enabled\x18\a \x01(\bR\n" +
+	"tlsEnabled\x12\x1e\n" +
+	"\vtls_ca_file\x18\b \x01(\tR\ttlsCaFile\x12&\n" +
+	"\x0ftls_server_name\x18\t \x01(\tR\rtlsServerName\x12F\n" +
+	"\x11operation_timeout\x18\n" +
+	" \x01(\v2\x19.google.protobuf.DurationR\x10operationTimeout\"\xa4\x03\n" +
 	"\tMessaging\x12E\n" +
 	"\brabbitmq\x18\x01 \x01(\v2).eagle.platform.config.Messaging.RabbitMQR\brabbitmq\x1a\xcf\x02\n" +
 	"\bRabbitMQ\x12\x18\n" +
@@ -1327,24 +1376,26 @@ var file_config_proto_depIdxs = []int32{
 	16, // 9: eagle.platform.config.Upstream.timeout:type_name -> google.protobuf.Duration
 	16, // 10: eagle.platform.config.Upstream.retry_backoff:type_name -> google.protobuf.Duration
 	16, // 11: eagle.platform.config.Upstream.authorization_refresh_interval:type_name -> google.protobuf.Duration
-	10, // 12: eagle.platform.config.File.s3:type_name -> eagle.platform.config.File.S3
-	11, // 13: eagle.platform.config.Cache.redis:type_name -> eagle.platform.config.Cache.Redis
-	12, // 14: eagle.platform.config.Messaging.rabbitmq:type_name -> eagle.platform.config.Messaging.RabbitMQ
-	13, // 15: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
-	14, // 16: eagle.platform.config.Server.grpc:type_name -> eagle.platform.config.Server.GRPC
-	15, // 17: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
-	16, // 18: eagle.platform.config.Cache.Redis.ttl:type_name -> google.protobuf.Duration
-	16, // 19: eagle.platform.config.Messaging.RabbitMQ.reconnect_backoff:type_name -> google.protobuf.Duration
-	16, // 20: eagle.platform.config.Messaging.RabbitMQ.consumer_retry_backoff:type_name -> google.protobuf.Duration
-	16, // 21: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
-	16, // 22: eagle.platform.config.Server.GRPC.timeout:type_name -> google.protobuf.Duration
-	16, // 23: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
-	16, // 24: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	16, // 12: eagle.platform.config.Upstream.authorization_max_staleness:type_name -> google.protobuf.Duration
+	10, // 13: eagle.platform.config.File.s3:type_name -> eagle.platform.config.File.S3
+	11, // 14: eagle.platform.config.Cache.redis:type_name -> eagle.platform.config.Cache.Redis
+	12, // 15: eagle.platform.config.Messaging.rabbitmq:type_name -> eagle.platform.config.Messaging.RabbitMQ
+	13, // 16: eagle.platform.config.Server.http:type_name -> eagle.platform.config.Server.HTTP
+	14, // 17: eagle.platform.config.Server.grpc:type_name -> eagle.platform.config.Server.GRPC
+	15, // 18: eagle.platform.config.Data.database:type_name -> eagle.platform.config.Data.Database
+	16, // 19: eagle.platform.config.Cache.Redis.ttl:type_name -> google.protobuf.Duration
+	16, // 20: eagle.platform.config.Cache.Redis.operation_timeout:type_name -> google.protobuf.Duration
+	16, // 21: eagle.platform.config.Messaging.RabbitMQ.reconnect_backoff:type_name -> google.protobuf.Duration
+	16, // 22: eagle.platform.config.Messaging.RabbitMQ.consumer_retry_backoff:type_name -> google.protobuf.Duration
+	16, // 23: eagle.platform.config.Server.HTTP.timeout:type_name -> google.protobuf.Duration
+	16, // 24: eagle.platform.config.Server.GRPC.timeout:type_name -> google.protobuf.Duration
+	16, // 25: eagle.platform.config.Data.Database.max_conn_lifetime:type_name -> google.protobuf.Duration
+	16, // 26: eagle.platform.config.Data.Database.max_conn_idle_time:type_name -> google.protobuf.Duration
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_config_proto_init() }

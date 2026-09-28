@@ -66,3 +66,63 @@ SELECT id, payload FROM event_outbox WHERE aggregate_id = $1 AND event_type = 'e
 		t.Fatalf("idempotent Create = %v, %v", idempotent, err)
 	}
 }
+
+func TestConcurrentCreationDeduplicatesAndRejectsDifferentIntent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("需要真实数据库")
+	}
+	ctx := context.Background()
+	repo := NewRepository(testDB)
+	products := map[int64]domain.ProductSnapshot{8: {ID: 8, SKU: "SKU-8", Name: "Concurrent", PriceCents: 100, Active: true}}
+	const workers = 8
+	results := make(chan *domain.Order, workers)
+	failures := make(chan error, workers)
+	start := make(chan struct{})
+	for range workers {
+		go func() {
+			<-start
+			value, err := domain.New("concurrent-owner", "same-key", []domain.RequestedItem{{ProductID: 8, Quantity: 1}}, products)
+			if err == nil {
+				value, err = repo.Create(ctx, value)
+			}
+			results <- value
+			failures <- err
+		}()
+	}
+	close(start)
+	var id string
+	for range workers {
+		value := <-results
+		if err := <-failures; err != nil {
+			t.Fatal(err)
+		}
+		if id == "" {
+			id = value.ID()
+		}
+		if id != value.ID() {
+			t.Fatalf("duplicate orders %s and %s", id, value.ID())
+		}
+	}
+	var count int
+	if err := testDB.SQL().QueryRowContext(ctx, "SELECT count(*) FROM event_outbox WHERE aggregate_id = $1", id).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("outbox count=%d, %v", count, err)
+	}
+	conflict, err := domain.New("concurrent-owner", "same-key", []domain.RequestedItem{{ProductID: 8, Quantity: 2}}, products)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Create(ctx, conflict); !errors.Is(err, domain.ErrIdempotencyConflict) {
+		t.Fatalf("different intent: %v", err)
+	}
+	// Old binaries write an empty fingerprint during the rolling migration window.
+	if _, err := testDB.SQL().ExecContext(ctx, "UPDATE purchase_order SET request_fingerprint = '' WHERE id = $1", id); err != nil {
+		t.Fatal(err)
+	}
+	existing, err := repo.FindCreated(ctx, "concurrent-owner", "same-key")
+	if err != nil || existing.RequestFingerprint() == "" {
+		t.Fatalf("legacy recovery: %v, %v", existing, err)
+	}
+	if _, err := repo.FindCreated(ctx, "another-owner", "same-key"); !errors.Is(err, domain.ErrOrderNotFound) {
+		t.Fatalf("owner boundary: %v", err)
+	}
+}

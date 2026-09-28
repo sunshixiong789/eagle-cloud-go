@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 
 	"github.com/eagle-go/eagle/app/order/internal/order/domain"
 )
@@ -16,6 +17,20 @@ func NewUsecase(repo domain.Writer, products domain.ProductCatalog) *Usecase {
 }
 
 func (uc *Usecase) Create(ctx context.Context, owner, idempotencyKey string, requested []domain.RequestedItem) (*domain.Order, error) {
+	fingerprint, err := domain.CreationFingerprint(owner, idempotencyKey, requested)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := uc.repo.FindCreated(ctx, owner, idempotencyKey)
+	if err == nil {
+		if existing.RequestFingerprint() != fingerprint {
+			return nil, domain.ErrIdempotencyConflict
+		}
+		return existing, nil
+	}
+	if !errors.Is(err, domain.ErrOrderNotFound) {
+		return nil, err
+	}
 	ids := make([]int64, 0, len(requested))
 	seen := make(map[int64]struct{}, len(requested))
 	for _, item := range requested {

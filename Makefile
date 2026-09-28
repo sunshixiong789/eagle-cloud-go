@@ -9,6 +9,7 @@ REGISTRY ?= eagle
 BUF := go tool buf
 GOOSE := go tool goose
 GOLANGCI_LINT := go tool golangci-lint
+BUF_AGAINST ?= .git\#branch=master,subdir=api
 # 每个服务拥有独立 database；可用 EAGLE_DSN 覆盖。
 EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle_$(SERVICE)?sslmode=disable
 MIGRATION_DIR := app/$(SERVICE)/migrations
@@ -34,7 +35,7 @@ config:
 # proto 风格检查 + 兼容性检查（against master）
 lint-proto:
 	$(BUF) lint
-	$(BUF) breaking api --against '.git#branch=master,subdir=api'
+	$(BUF) breaking api --against "$(BUF_AGAINST)"
 
 .PHONY: ent
 # 为每个服务生成独占的 Ent 数据访问代码
@@ -175,3 +176,16 @@ help:
 	} { lastLine = $$0 }' $(MAKEFILE_LIST)
 
 .DEFAULT_GOAL := help
+
+.PHONY: build-independent
+# 在关闭 Workspace 的环境分别编译，避免 go.work 掩盖服务缺失的依赖声明
+build-independent:
+	@for module in $(MODULES); do \
+		GOWORK=off go -C $$module build -mod=readonly ./... || exit 1; \
+	done
+
+.PHONY: test-adapters
+# 使用显式指定的隔离 Redis/RabbitMQ；禁止缺少服务时静默跳过验收
+test-adapters:
+	@test -n "$$EAGLE_TEST_REDIS_ADDRESS" -a -n "$$EAGLE_TEST_RABBITMQ_URL" || (echo "set EAGLE_TEST_REDIS_ADDRESS and EAGLE_TEST_RABBITMQ_URL"; exit 1)
+	go test -race -count=1 ./pkg/messaging/rabbitmq ./app/product/internal/product/infrastructure ./app/order/internal/order/infrastructure

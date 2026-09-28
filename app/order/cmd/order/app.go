@@ -23,6 +23,7 @@ func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Compon
 
 func orderErrorMappings() []server.ErrorMappingRule {
 	return []server.ErrorMappingRule{
+		server.Conflict(orderdomain.ErrIdempotencyConflict, orderv1.ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT),
 		server.NotFound(orderdomain.ErrOrderNotFound, orderv1.ErrorReason_ERROR_REASON_ORDER_NOT_FOUND),
 		server.BadRequest(orderdomain.ErrProductUnavailable, orderv1.ErrorReason_ERROR_REASON_PRODUCT_UNAVAILABLE),
 		server.BadRequest(orderdomain.ErrInvalidOrder, orderv1.ErrorReason_ERROR_REASON_INVALID_ORDER),

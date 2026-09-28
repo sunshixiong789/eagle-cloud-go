@@ -1,0 +1,78 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: --health-cmd 'redis-cli ping' --health-interval 5s --health-timeout 3s --health-retries 20
+      rabbitmq:
+        image: rabbitmq:4.1-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: eagle_ci
+          RABBITMQ_DEFAULT_PASS: eagle_ci_test
+        ports: ['5672:5672']
+        options: --health-cmd 'rabbitmq-diagnostics -q ping' --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      EAGLE_TEST_REDIS_ADDRESS: 127.0.0.1:6379
+      EAGLE_TEST_RABBITMQ_URL: amqp://eagle_ci:eagle_ci_test@127.0.0.1:5672/
+      GOPROXY: https://proxy.golang.org,direct
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.work
+          cache-dependency-path: '**/go.sum'
+      - name: Check generated sources and module manifests
+        run: |
+          make generate
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
+      - name: Check API compatibility
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          base="${BASE_SHA:-origin/$DEFAULT_BRANCH}"
+          make lint-proto BUF_AGAINST=".git#ref=$base,subdir=api"
+      - run: make lint
+      - name: Race, real adapters, migration round trips and architecture
+        run: make test
+      - run: make build
+      - run: make build-independent
+      - run: make validate-deploy
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [admin, product, order]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: false
+          build-args: |
+            SERVICE=${{ matrix.service }}
+            VERSION=${{ github.sha }}
+            GOPROXY=https://proxy.golang.org,direct
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

@@ -35,6 +35,20 @@ func (_c *PurchaseOrderCreate) SetIdempotencyKey(v string) *PurchaseOrderCreate 
 	return _c
 }
 
+// SetRequestFingerprint sets the "request_fingerprint" field.
+func (_c *PurchaseOrderCreate) SetRequestFingerprint(v string) *PurchaseOrderCreate {
+	_c.mutation.SetRequestFingerprint(v)
+	return _c
+}
+
+// SetNillableRequestFingerprint sets the "request_fingerprint" field if the given value is not nil.
+func (_c *PurchaseOrderCreate) SetNillableRequestFingerprint(v *string) *PurchaseOrderCreate {
+	if v != nil {
+		_c.SetRequestFingerprint(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *PurchaseOrderCreate) SetStatus(v string) *PurchaseOrderCreate {
 	_c.mutation.SetStatus(v)
@@ -102,6 +116,10 @@ func (_c *PurchaseOrderCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PurchaseOrderCreate) defaults() {
+	if _, ok := _c.mutation.RequestFingerprint(); !ok {
+		v := purchaseorder.DefaultRequestFingerprint
+		_c.mutation.SetRequestFingerprint(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := purchaseorder.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -124,6 +142,14 @@ func (_c *PurchaseOrderCreate) check() error {
 	if v, ok := _c.mutation.IdempotencyKey(); ok {
 		if err := purchaseorder.IdempotencyKeyValidator(v); err != nil {
 			return &ValidationError{Name: "idempotency_key", err: fmt.Errorf(`ent: validator failed for field "PurchaseOrder.idempotency_key": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RequestFingerprint(); !ok {
+		return &ValidationError{Name: "request_fingerprint", err: errors.New(`ent: missing required field "PurchaseOrder.request_fingerprint"`)}
+	}
+	if v, ok := _c.mutation.RequestFingerprint(); ok {
+		if err := purchaseorder.RequestFingerprintValidator(v); err != nil {
+			return &ValidationError{Name: "request_fingerprint", err: fmt.Errorf(`ent: validator failed for field "PurchaseOrder.request_fingerprint": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
@@ -193,6 +219,10 @@ func (_c *PurchaseOrderCreate) createSpec() (*PurchaseOrder, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.IdempotencyKey(); ok {
 		_spec.SetField(purchaseorder.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = value
+	}
+	if value, ok := _c.mutation.RequestFingerprint(); ok {
+		_spec.SetField(purchaseorder.FieldRequestFingerprint, field.TypeString, value)
+		_node.RequestFingerprint = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(purchaseorder.FieldStatus, field.TypeString, value)
@@ -319,6 +349,9 @@ func (u *PurchaseOrderUpsertOne) UpdateNewValues() *PurchaseOrderUpsertOne {
 		}
 		if _, exists := u.create.mutation.IdempotencyKey(); exists {
 			s.SetIgnore(purchaseorder.FieldIdempotencyKey)
+		}
+		if _, exists := u.create.mutation.RequestFingerprint(); exists {
+			s.SetIgnore(purchaseorder.FieldRequestFingerprint)
 		}
 		if _, exists := u.create.mutation.CreatedAt(); exists {
 			s.SetIgnore(purchaseorder.FieldCreatedAt)
@@ -588,6 +621,9 @@ func (u *PurchaseOrderUpsertBulk) UpdateNewValues() *PurchaseOrderUpsertBulk {
 			}
 			if _, exists := b.mutation.IdempotencyKey(); exists {
 				s.SetIgnore(purchaseorder.FieldIdempotencyKey)
+			}
+			if _, exists := b.mutation.RequestFingerprint(); exists {
+				s.SetIgnore(purchaseorder.FieldRequestFingerprint)
 			}
 			if _, exists := b.mutation.CreatedAt(); exists {
 				s.SetIgnore(purchaseorder.FieldCreatedAt)

@@ -24,10 +24,11 @@ const (
 type ErrorReason int32
 
 const (
-	ErrorReason_ERROR_REASON_UNSPECIFIED         ErrorReason = 0
-	ErrorReason_ERROR_REASON_ORDER_NOT_FOUND     ErrorReason = 1
-	ErrorReason_ERROR_REASON_PRODUCT_UNAVAILABLE ErrorReason = 2
-	ErrorReason_ERROR_REASON_INVALID_ORDER       ErrorReason = 3
+	ErrorReason_ERROR_REASON_UNSPECIFIED          ErrorReason = 0
+	ErrorReason_ERROR_REASON_ORDER_NOT_FOUND      ErrorReason = 1
+	ErrorReason_ERROR_REASON_PRODUCT_UNAVAILABLE  ErrorReason = 2
+	ErrorReason_ERROR_REASON_INVALID_ORDER        ErrorReason = 3
+	ErrorReason_ERROR_REASON_IDEMPOTENCY_CONFLICT ErrorReason = 4
 )
 
 // Enum value maps for ErrorReason.
@@ -37,12 +38,14 @@ var (
 		1: "ERROR_REASON_ORDER_NOT_FOUND",
 		2: "ERROR_REASON_PRODUCT_UNAVAILABLE",
 		3: "ERROR_REASON_INVALID_ORDER",
+		4: "ERROR_REASON_IDEMPOTENCY_CONFLICT",
 	}
 	ErrorReason_value = map[string]int32{
-		"ERROR_REASON_UNSPECIFIED":         0,
-		"ERROR_REASON_ORDER_NOT_FOUND":     1,
-		"ERROR_REASON_PRODUCT_UNAVAILABLE": 2,
-		"ERROR_REASON_INVALID_ORDER":       3,
+		"ERROR_REASON_UNSPECIFIED":          0,
+		"ERROR_REASON_ORDER_NOT_FOUND":      1,
+		"ERROR_REASON_PRODUCT_UNAVAILABLE":  2,
+		"ERROR_REASON_INVALID_ORDER":        3,
+		"ERROR_REASON_IDEMPOTENCY_CONFLICT": 4,
 	}
 )
 
@@ -77,12 +80,13 @@ var File_eagle_order_v1_error_reason_proto protoreflect.FileDescriptor
 
 const file_eagle_order_v1_error_reason_proto_rawDesc = "" +
 	"\n" +
-	"!eagle/order/v1/error_reason.proto\x12\x0eeagle.order.v1*\x93\x01\n" +
+	"!eagle/order/v1/error_reason.proto\x12\x0eeagle.order.v1*\xba\x01\n" +
 	"\vErrorReason\x12\x1c\n" +
 	"\x18ERROR_REASON_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cERROR_REASON_ORDER_NOT_FOUND\x10\x01\x12$\n" +
 	" ERROR_REASON_PRODUCT_UNAVAILABLE\x10\x02\x12\x1e\n" +
-	"\x1aERROR_REASON_INVALID_ORDER\x10\x03B6Z4github.com/eagle-go/eagle/api/eagle/order/v1;orderv1b\x06proto3"
+	"\x1aERROR_REASON_INVALID_ORDER\x10\x03\x12%\n" +
+	"!ERROR_REASON_IDEMPOTENCY_CONFLICT\x10\x04B6Z4github.com/eagle-go/eagle/api/eagle/order/v1;orderv1b\x06proto3"
 
 var (
 	file_eagle_order_v1_error_reason_proto_rawDescOnce sync.Once

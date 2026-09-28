@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
+	"net"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -32,6 +32,7 @@ type Config struct {
 	ReconnectBackoff time.Duration
 	ConsumerAttempts int
 	RetryBackoff     time.Duration
+	PublishTimeout   time.Duration
 }
 
 type Message struct {
@@ -44,27 +45,49 @@ type Message struct {
 }
 
 type Publisher struct {
-	config Config
-	mu     sync.Mutex
-	conn   *amqp.Connection
-	ch     *amqp.Channel
+	config  Config
+	gate    chan struct{}
+	socket  net.Conn
+	returns <-chan amqp.Return
+	conn    *amqp.Connection
+	ch      *amqp.Channel
 }
 
 func NewPublisher(config Config) (*Publisher, error) {
 	if config.URL == "" || config.Exchange == "" {
 		return nil, errors.New("rabbitmq: URL and exchange are required")
 	}
-	return &Publisher{config: config}, nil
+	if config.PublishTimeout <= 0 {
+		config.PublishTimeout = 5 * time.Second
+	}
+	return &Publisher{config: config, gate: make(chan struct{}, 1)}, nil
 }
 
+// ErrUnroutable means no queue accepted the routing key; an ack alone is insufficient.
+var ErrUnroutable = errors.New("rabbitmq: message was not routed to a queue")
+
 func (p *Publisher) Publish(ctx context.Context, message Message) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if err := p.ensureConnected(); err != nil {
+	ctx, cancel := context.WithTimeout(ctx, p.config.PublishTimeout)
+	defer cancel()
+	select {
+	case p.gate <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-p.gate }()
+	if err := p.ensureConnected(ctx); err != nil {
 		p.recordPublishFailure(ctx, message)
 		return err
 	}
-	confirmation, err := p.ch.PublishWithDeferredConfirmWithContext(ctx, p.config.Exchange, message.RoutingKey, false, false, amqp.Publishing{
+	deadline, _ := ctx.Deadline()
+	if err := p.socket.SetDeadline(deadline); err != nil {
+		p.reset()
+		return err
+	}
+	socket := p.socket
+	stop := closeOnCancel(ctx, socket)
+	defer func() { stop(); _ = socket.SetDeadline(time.Time{}) }()
+	confirmation, err := p.ch.PublishWithDeferredConfirmWithContext(ctx, p.config.Exchange, message.RoutingKey, true, false, amqp.Publishing{
 		Headers: message.Headers, ContentType: "application/protobuf", DeliveryMode: amqp.Persistent,
 		MessageId: message.ID, Type: message.Type, Timestamp: message.Timestamp, Body: message.Body,
 	})
@@ -80,8 +103,21 @@ func (p *Publisher) Publish(ctx context.Context, message Message) error {
 		return fmt.Errorf("rabbitmq: wait publisher confirm: %w", err)
 	}
 	if !acked {
+		p.reset()
 		p.recordPublishFailure(ctx, message)
 		return errors.New("rabbitmq: broker rejected published message")
+	}
+	// AMQP dispatch delivers basic.return before its confirm. With one in-flight
+	// publication, the buffered return belongs to this message and is now observable.
+	select {
+	case returned, ok := <-p.returns:
+		p.recordPublishFailure(ctx, message)
+		if !ok {
+			p.reset()
+			return errors.New("rabbitmq: publisher channel closed")
+		}
+		return fmt.Errorf("%w: %d %s (%s)", ErrUnroutable, returned.ReplyCode, returned.ReplyText, returned.RoutingKey)
+	default:
 	}
 	messagesPublished.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("messaging.destination.name", p.config.Exchange),
@@ -99,14 +135,36 @@ func (p *Publisher) recordPublishFailure(ctx context.Context, message Message) {
 	))
 }
 
-func (p *Publisher) ensureConnected() error {
+func (p *Publisher) ensureConnected(ctx context.Context) error {
 	if p.conn != nil && !p.conn.IsClosed() && p.ch != nil && !p.ch.IsClosed() {
 		return nil
 	}
 	p.reset()
-	conn, err := amqp.Dial(p.config.URL)
+	stop := func() {}
+	defer func() { stop() }()
+	conn, err := amqp.DialConfig(p.config.URL, amqp.Config{Dial: func(network, address string) (net.Conn, error) {
+		socket, err := (&net.Dialer{}).DialContext(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		deadline, _ := ctx.Deadline()
+		if err := socket.SetDeadline(deadline); err != nil {
+			_ = socket.Close()
+			return nil, err
+		}
+		stop = closeOnCancel(ctx, socket)
+		p.socket = socket
+		return socket, nil
+	}})
 	if err != nil {
+		p.reset()
 		return fmt.Errorf("rabbitmq: connect publisher: %w", err)
+	}
+	deadline, _ := ctx.Deadline()
+	if err := p.socket.SetDeadline(deadline); err != nil {
+		_ = conn.Close()
+		p.reset()
+		return err
 	}
 	ch, err := conn.Channel()
 	if err != nil {
@@ -123,24 +181,38 @@ func (p *Publisher) ensureConnected() error {
 		_ = conn.Close()
 		return fmt.Errorf("rabbitmq: enable publisher confirms: %w", err)
 	}
+	p.returns = ch.NotifyReturn(make(chan amqp.Return, 1))
 	p.conn, p.ch = conn, ch
 	return nil
 }
 
+// Join a cancellation callback before reusing a connection; otherwise a callback
+// racing with the next publication could close that publication's transport.
+func closeOnCancel(ctx context.Context, socket net.Conn) func() {
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { _ = socket.Close(); close(done) })
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
+}
+
 func (p *Publisher) Close() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.gate <- struct{}{}
+	defer func() { <-p.gate }()
 	p.reset()
 }
 
 func (p *Publisher) reset() {
-	if p.ch != nil {
-		_ = p.ch.Close()
+	// Closing the transport also interrupts a blocked AMQP write or handshake.
+	if p.socket != nil {
+		_ = p.socket.Close()
 	}
 	if p.conn != nil {
-		_ = p.conn.Close()
+		_ = p.conn.CloseDeadline(time.Now().Add(time.Second))
 	}
-	p.ch, p.conn = nil, nil
+	p.conn, p.ch, p.socket, p.returns = nil, nil, nil, nil
 }
 
 type Handler func(context.Context, Message) error
@@ -221,6 +293,9 @@ func consume(ctx context.Context, config Config, queue, routingKey string, logge
 			handleErr := handleWithRetry(ctx, config.ConsumerAttempts, config.RetryBackoff, message, handler, func() {
 				messagesRetried.Add(ctx, 1, attrs)
 			})
+			if ctx.Err() != nil {
+				return ctx.Err()
+			} // Closing the channel requeues in-flight work on shutdown.
 			if handleErr != nil {
 				messageConsumeFailed.Add(ctx, 1, attrs)
 				messagesDeadLettered.Add(ctx, 1, attrs)

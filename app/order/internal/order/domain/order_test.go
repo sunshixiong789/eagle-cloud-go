@@ -51,3 +51,18 @@ func TestRehydrateOrderRejectsOverflowedSubtotal(t *testing.T) {
 		t.Fatalf("err = %v, want %v", err, ErrInvalidOrder)
 	}
 }
+
+func TestCreationFingerprintUsesCanonicalIntent(t *testing.T) {
+	a, err := CreationFingerprint("owner", "key", []RequestedItem{{ProductID: 2, Quantity: 3}, {ProductID: 1, Quantity: 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := CreationFingerprint("owner", "key", []RequestedItem{{ProductID: 1, Quantity: 2}, {ProductID: 2, Quantity: 3}})
+	if err != nil || a != b {
+		t.Fatalf("order-dependent fingerprint: %s %s %v", a, b, err)
+	}
+	c, err := CreationFingerprint("owner", "key", []RequestedItem{{ProductID: 1, Quantity: 3}, {ProductID: 2, Quantity: 3}})
+	if err != nil || a == c {
+		t.Fatalf("different intent collides: %s %s %v", a, c, err)
+	}
+}

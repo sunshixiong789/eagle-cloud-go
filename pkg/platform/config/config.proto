@@ -38,6 +38,9 @@ message Upstream {
   google.protobuf.Duration retry_backoff = 5;
   // Resource services periodically replace their local authorization snapshot.
   google.protobuf.Duration authorization_refresh_interval = 6;
+  // Expired snapshots deny permission-protected requests; they do not remove
+  // internal/public endpoints from service discovery.
+  google.protobuf.Duration authorization_max_staleness = 7;
 }
 
 // File configures the development/local blob adapter. The module keeps a
@@ -66,6 +69,10 @@ message Cache {
     string password = 4;
     int32 database = 5;
     google.protobuf.Duration ttl = 6;
+    bool tls_enabled = 7;
+    string tls_ca_file = 8;
+    string tls_server_name = 9;
+    google.protobuf.Duration operation_timeout = 10;
   }
   Redis redis = 1;
 }

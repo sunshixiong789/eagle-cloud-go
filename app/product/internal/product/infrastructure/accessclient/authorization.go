@@ -18,7 +18,6 @@ import (
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	"github.com/eagle-go/eagle/pkg/authn"
 	"github.com/eagle-go/eagle/pkg/authz"
-	"github.com/eagle-go/eagle/pkg/healthx"
 	platformclient "github.com/eagle-go/eagle/pkg/platform/client"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	"github.com/eagle-go/eagle/pkg/retryx"
@@ -29,11 +28,12 @@ type snapshotClient interface {
 }
 
 type Authorizer struct {
-	client      snapshotClient
-	enforcer    *authz.Enforcer
-	maxAttempts int
-	backoff     time.Duration
-	lastRefresh atomic.Int64
+	client       snapshotClient
+	enforcer     *authz.Enforcer
+	maxAttempts  int
+	backoff      time.Duration
+	lastRefresh  atomic.Int64
+	maxStaleness time.Duration
 }
 
 func NewAuthorizer(c *config.Upstream, serviceAuth *config.ServiceAuth, logger *slog.Logger) (*Authorizer, func(), error) {
@@ -64,6 +64,7 @@ func NewAuthorizer(c *config.Upstream, serviceAuth *config.ServiceAuth, logger *
 	a := &Authorizer{
 		client: accessv1.NewAuthorizationServiceClient(conn), enforcer: enforcer,
 		maxAttempts: int(c.GetMaxAttempts()), backoff: c.GetRetryBackoff().AsDuration(),
+		maxStaleness: c.GetAuthorizationMaxStaleness().AsDuration(),
 	}
 	if err := a.Refresh(context.Background()); err != nil {
 		_ = conn.Close()
@@ -91,16 +92,7 @@ func NewAuthorizer(c *config.Upstream, serviceAuth *config.ServiceAuth, logger *
 			}
 		}
 	}()
-	maxStaleness := 3 * interval
-	unregisterHealth := healthx.Default.Register("authorization-snapshot", func(context.Context) error {
-		last := time.Unix(0, a.lastRefresh.Load())
-		if time.Since(last) > maxStaleness {
-			return fmt.Errorf("last successful refresh was %s ago", time.Since(last).Round(time.Second))
-		}
-		return nil
-	})
 	cleanup := func() {
-		unregisterHealth()
 		cancel()
 		<-done
 		_ = conn.Close()
@@ -120,10 +112,13 @@ func (a *Authorizer) Refresh(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("fetch authorization policy snapshot: %w", err)
 	}
-	if resp.GetPolicyVersion() < 0 {
+	if resp == nil || resp.GetPolicyVersion() < 0 {
 		return fmt.Errorf("authorization snapshot has invalid version %d", resp.GetPolicyVersion())
 	}
-	if resp.GetPolicyVersion() <= a.enforcer.LoadedPolicyVersion() && a.lastRefresh.Load() != 0 {
+	if resp.GetPolicyVersion() < a.enforcer.LoadedPolicyVersion() {
+		return errors.New("authorization snapshot version regressed")
+	}
+	if resp.GetPolicyVersion() == a.enforcer.LoadedPolicyVersion() && a.lastRefresh.Load() != 0 {
 		a.lastRefresh.Store(time.Now().UnixNano())
 		return nil
 	}
@@ -145,6 +140,10 @@ func (a *Authorizer) Refresh(ctx context.Context) error {
 }
 
 func (a *Authorizer) AllowContext(ctx context.Context, roles []string, permission string) (bool, error) {
+	last := a.lastRefresh.Load()
+	if last == 0 || time.Since(time.Unix(0, last)) > a.maxStaleness {
+		return false, errors.New("authorization policy snapshot expired")
+	}
 	return a.enforcer.AllowContext(ctx, roles, permission)
 }
 

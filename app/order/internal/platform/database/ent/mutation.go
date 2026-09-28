@@ -1787,19 +1787,20 @@ func (m *OutboxEventMutation) ResetEdge(name string) error {
 // PurchaseOrderMutation represents an operation that mutates the PurchaseOrder nodes in the graph.
 type PurchaseOrderMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	owner_subject   *string
-	idempotency_key *string
-	status          *string
-	total_cents     *int64
-	addtotal_cents  *int64
-	created_at      *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*PurchaseOrder, error)
-	predicates      []predicate.PurchaseOrder
+	op                  Op
+	typ                 string
+	id                  *string
+	owner_subject       *string
+	idempotency_key     *string
+	request_fingerprint *string
+	status              *string
+	total_cents         *int64
+	addtotal_cents      *int64
+	created_at          *time.Time
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*PurchaseOrder, error)
+	predicates          []predicate.PurchaseOrder
 }
 
 var _ ent.Mutation = (*PurchaseOrderMutation)(nil)
@@ -1978,6 +1979,42 @@ func (m *PurchaseOrderMutation) ResetIdempotencyKey() {
 	m.idempotency_key = nil
 }
 
+// SetRequestFingerprint sets the "request_fingerprint" field.
+func (m *PurchaseOrderMutation) SetRequestFingerprint(s string) {
+	m.request_fingerprint = &s
+}
+
+// RequestFingerprint returns the value of the "request_fingerprint" field in the mutation.
+func (m *PurchaseOrderMutation) RequestFingerprint() (r string, exists bool) {
+	v := m.request_fingerprint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestFingerprint returns the old "request_fingerprint" field's value of the PurchaseOrder entity.
+// If the PurchaseOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PurchaseOrderMutation) OldRequestFingerprint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestFingerprint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestFingerprint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestFingerprint: %w", err)
+	}
+	return oldValue.RequestFingerprint, nil
+}
+
+// ResetRequestFingerprint resets all changes to the "request_fingerprint" field.
+func (m *PurchaseOrderMutation) ResetRequestFingerprint() {
+	m.request_fingerprint = nil
+}
+
 // SetStatus sets the "status" field.
 func (m *PurchaseOrderMutation) SetStatus(s string) {
 	m.status = &s
@@ -2140,12 +2177,15 @@ func (m *PurchaseOrderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PurchaseOrderMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
 	if m.owner_subject != nil {
 		fields = append(fields, purchaseorder.FieldOwnerSubject)
 	}
 	if m.idempotency_key != nil {
 		fields = append(fields, purchaseorder.FieldIdempotencyKey)
+	}
+	if m.request_fingerprint != nil {
+		fields = append(fields, purchaseorder.FieldRequestFingerprint)
 	}
 	if m.status != nil {
 		fields = append(fields, purchaseorder.FieldStatus)
@@ -2168,6 +2208,8 @@ func (m *PurchaseOrderMutation) Field(name string) (ent.Value, bool) {
 		return m.OwnerSubject()
 	case purchaseorder.FieldIdempotencyKey:
 		return m.IdempotencyKey()
+	case purchaseorder.FieldRequestFingerprint:
+		return m.RequestFingerprint()
 	case purchaseorder.FieldStatus:
 		return m.Status()
 	case purchaseorder.FieldTotalCents:
@@ -2187,6 +2229,8 @@ func (m *PurchaseOrderMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldOwnerSubject(ctx)
 	case purchaseorder.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
+	case purchaseorder.FieldRequestFingerprint:
+		return m.OldRequestFingerprint(ctx)
 	case purchaseorder.FieldStatus:
 		return m.OldStatus(ctx)
 	case purchaseorder.FieldTotalCents:
@@ -2215,6 +2259,13 @@ func (m *PurchaseOrderMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIdempotencyKey(v)
+		return nil
+	case purchaseorder.FieldRequestFingerprint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestFingerprint(v)
 		return nil
 	case purchaseorder.FieldStatus:
 		v, ok := value.(string)
@@ -2306,6 +2357,9 @@ func (m *PurchaseOrderMutation) ResetField(name string) error {
 		return nil
 	case purchaseorder.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()
+		return nil
+	case purchaseorder.FieldRequestFingerprint:
+		m.ResetRequestFingerprint()
 		return nil
 	case purchaseorder.FieldStatus:
 		m.ResetStatus()

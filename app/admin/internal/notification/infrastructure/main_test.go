@@ -14,22 +14,27 @@ import (
 var notificationTestDB *platformdb.Database
 
 func TestMain(m *testing.M) {
+	os.Exit(runTests(m))
+}
+
+// Return before os.Exit so database and process cleanup always run.
+func runTests(m *testing.M) int {
 	flag.Parse()
 	if testing.Short() {
-		os.Exit(m.Run())
+		return m.Run()
 	}
 	pg, err := testkit.StartPostgres("admin-notification", "eagle_admin_notification_test", "admin")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = pg.Close() }()
 	db, cleanup, err := platformdb.Open(&config.Data{Database: &config.Data_Database{Dsn: pg.DSN, MaxConns: 4, MaxIdleConns: 1}})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 	notificationTestDB = db
 	defer cleanup()
-	os.Exit(m.Run())
+	return m.Run()
 }

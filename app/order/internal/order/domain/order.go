@@ -3,17 +3,21 @@ package domain
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
 
 var (
-	ErrOrderNotFound      = errors.New("order not found")
-	ErrProductUnavailable = errors.New("product unavailable")
-	ErrInvalidOrder       = errors.New("invalid order")
+	ErrOrderNotFound       = errors.New("order not found")
+	ErrProductUnavailable  = errors.New("product unavailable")
+	ErrInvalidOrder        = errors.New("invalid order")
+	ErrIdempotencyConflict = errors.New("idempotency key was already used for another request")
 )
 
 const StatusCreated = "created"
@@ -41,18 +45,20 @@ type Item struct {
 }
 
 type Order struct {
-	id             string
-	ownerSubject   string
-	idempotencyKey string
-	status         string
-	totalCents     int64
-	items          []Item
-	createdAt      time.Time
+	id                 string
+	ownerSubject       string
+	idempotencyKey     string
+	requestFingerprint string
+	status             string
+	totalCents         int64
+	items              []Item
+	createdAt          time.Time
 }
 
 func New(owner, idempotencyKey string, requests []RequestedItem, products map[int64]ProductSnapshot) (*Order, error) {
-	if owner == "" || idempotencyKey == "" || len(idempotencyKey) > 64 || len(requests) == 0 {
-		return nil, ErrInvalidOrder
+	fingerprint, err := CreationFingerprint(owner, idempotencyKey, requests)
+	if err != nil {
+		return nil, err
 	}
 	seen := make(map[int64]struct{}, len(requests))
 	items := make([]Item, 0, len(requests))
@@ -89,7 +95,7 @@ func New(owner, idempotencyKey string, requests []RequestedItem, products map[in
 	}
 	return &Order{
 		id: id, ownerSubject: owner, idempotencyKey: idempotencyKey,
-		status: StatusCreated, totalCents: total, items: items,
+		status: StatusCreated, totalCents: total, items: items, requestFingerprint: fingerprint,
 	}, nil
 }
 
@@ -125,12 +131,50 @@ func RehydrateOrder(snapshot OrderSnapshot) (*Order, error) {
 	if total != snapshot.TotalCents {
 		return nil, ErrInvalidOrder
 	}
+	requests := make([]RequestedItem, len(snapshot.Items))
+	for i, item := range snapshot.Items {
+		requests[i] = RequestedItem{ProductID: item.ProductID, Quantity: item.Quantity}
+	}
+	fingerprint, err := CreationFingerprint(snapshot.OwnerSubject, snapshot.IdempotencyKey, requests)
+	if err != nil {
+		return nil, err
+	}
 	items := append([]Item(nil), snapshot.Items...)
 	return &Order{
 		id: snapshot.ID, ownerSubject: snapshot.OwnerSubject, idempotencyKey: snapshot.IdempotencyKey,
-		status: snapshot.Status, totalCents: snapshot.TotalCents, items: items, createdAt: snapshot.CreatedAt,
+		status: snapshot.Status, totalCents: snapshot.TotalCents, items: items, createdAt: snapshot.CreatedAt, requestFingerprint: fingerprint,
 	}, nil
 }
+
+// CreationFingerprint identifies the caller's intent, independent of item order or current prices.
+func CreationFingerprint(owner, key string, requests []RequestedItem) (string, error) {
+	if owner == "" || key == "" || len(key) > 64 || len(requests) == 0 || len(requests) > 100 {
+		return "", ErrInvalidOrder
+	}
+	items := slices.Clone(requests)
+	slices.SortFunc(items, func(a, b RequestedItem) int {
+		if a.ProductID < b.ProductID {
+			return -1
+		}
+		if a.ProductID > b.ProductID {
+			return 1
+		}
+		return 0
+	})
+	var canonical strings.Builder
+	for i, item := range items {
+		if item.ProductID <= 0 || item.Quantity <= 0 || item.Quantity > 999 || (i > 0 && items[i-1].ProductID == item.ProductID) {
+			return "", ErrInvalidOrder
+		}
+		canonical.WriteString(strconv.FormatInt(item.ProductID, 10))
+		canonical.WriteByte(':')
+		canonical.WriteString(strconv.FormatInt(int64(item.Quantity), 10))
+		canonical.WriteByte(';')
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(canonical.String()))), nil
+}
+
+func (o *Order) RequestFingerprint() string { return o.requestFingerprint }
 
 func NewID() (string, error) {
 	var value [16]byte
@@ -158,6 +202,7 @@ type ListQuery struct {
 }
 
 type Writer interface {
+	FindCreated(context.Context, string, string) (*Order, error)
 	Create(context.Context, *Order) (*Order, error)
 }
 

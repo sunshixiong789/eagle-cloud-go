@@ -13,14 +13,14 @@ type fakeProductCache struct {
 	err   error
 }
 
-func (f *fakeProductCache) Get(context.Context, int64) (*domain.Product, bool, error) {
-	return f.value, f.value != nil, f.err
+func (f *fakeProductCache) Lookup(context.Context, int64) (*domain.Product, string, error) {
+	return f.value, "token", f.err
 }
-func (f *fakeProductCache) SetIfNewer(_ context.Context, value *domain.Product) error {
+func (f *fakeProductCache) Fill(_ context.Context, value *domain.Product, _ string) error {
 	f.value = value
 	return f.err
 }
-func (f *fakeProductCache) Delete(context.Context, int64) error { f.value = nil; return f.err }
+func (f *fakeProductCache) Invalidate(context.Context, int64) error { f.value = nil; return f.err }
 
 type fakeProductRepository struct {
 	getCalls int

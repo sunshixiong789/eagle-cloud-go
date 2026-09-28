@@ -10,6 +10,8 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/eagle-go/eagle/pkg/messaging/rabbitmq"
 )
 
 func main() {
@@ -43,7 +45,12 @@ func main() {
 	case "inspect":
 		err = inspect(channel, *queue, *limit)
 	case "redrive":
-		err = redrive(ctx, channel, *exchange, *queue, *routingKey, *limit)
+		publisher, publishErr := rabbitmq.NewPublisher(rabbitmq.Config{URL: *url, Exchange: *exchange})
+		if publishErr != nil {
+			panic(publishErr)
+		}
+		defer publisher.Close()
+		err = redrive(ctx, channel, publisher, *queue, *routingKey, *limit)
 	default:
 		err = fmt.Errorf("unsupported command %q", *command)
 	}
@@ -85,10 +92,7 @@ func inspect(channel *amqp.Channel, queue string, limit int) error {
 	return nil
 }
 
-func redrive(ctx context.Context, channel *amqp.Channel, exchange, queue, routingKey string, limit int) error {
-	if err := channel.Confirm(false); err != nil {
-		return err
-	}
+func redrive(ctx context.Context, channel *amqp.Channel, publisher *rabbitmq.Publisher, queue, routingKey string, limit int) error {
 	redriven := 0
 	for range limit {
 		delivery, ok, err := channel.Get(queue, false)
@@ -103,21 +107,9 @@ func redrive(ctx context.Context, channel *amqp.Channel, exchange, queue, routin
 			headers = amqp.Table{}
 		}
 		headers["x-eagle-redriven-at"] = time.Now().UTC().Format(time.RFC3339)
-		confirmation, err := channel.PublishWithDeferredConfirmWithContext(ctx, exchange, routingKey, false, false, amqp.Publishing{
-			Headers: headers, ContentType: delivery.ContentType, DeliveryMode: amqp.Persistent,
-			MessageId: delivery.MessageId, Type: delivery.Type, Timestamp: delivery.Timestamp, Body: delivery.Body,
-		})
-		if err != nil {
+		if err := publisher.Publish(ctx, rabbitmq.Message{Headers: headers, ID: delivery.MessageId, Type: delivery.Type, Timestamp: delivery.Timestamp, Body: delivery.Body, RoutingKey: routingKey}); err != nil {
 			_ = delivery.Nack(false, true)
 			return err
-		}
-		confirmed, err := confirmation.WaitContext(ctx)
-		if err != nil || !confirmed {
-			_ = delivery.Nack(false, true)
-			if err != nil {
-				return err
-			}
-			return fmt.Errorf("broker rejected redriven message %q", delivery.MessageId)
 		}
 		if err := delivery.Ack(false); err != nil {
 			return err

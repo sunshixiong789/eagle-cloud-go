@@ -21,20 +21,24 @@ func NewCachedRepository(next domain.Repository, cache productCache, logger *slo
 func (r *cachedRepository) Create(ctx context.Context, value *domain.Product) (*domain.Product, error) {
 	created, err := r.next.Create(ctx, value)
 	if err == nil {
-		r.setIfNewer(ctx, created)
+		r.invalidate(ctx, created.ID())
 	}
 	return created, err
 }
 
 func (r *cachedRepository) Get(ctx context.Context, id int64) (*domain.Product, error) {
-	if cached, ok, err := r.cache.Get(ctx, id); err == nil && ok {
+	cached, token, cacheErr := r.cache.Lookup(ctx, id)
+	if cacheErr == nil && cached != nil {
 		return cached, nil
-	} else if err != nil {
-		r.warn(ctx, "读取 Redis 商品缓存失败", err)
+	}
+	if cacheErr != nil {
+		r.warn(ctx, "读取 Redis 商品缓存失败", cacheErr)
 	}
 	product, err := r.next.Get(ctx, id)
-	if err == nil {
-		r.setIfNewer(ctx, product)
+	if err == nil && cacheErr == nil && token != "" {
+		if fillErr := r.cache.Fill(ctx, product, token); fillErr != nil {
+			r.warn(ctx, "写入 Redis 商品缓存失败", fillErr)
+		}
 	}
 	return product, err
 }
@@ -50,7 +54,7 @@ func (r *cachedRepository) List(ctx context.Context, query domain.ListQuery) ([]
 func (r *cachedRepository) Update(ctx context.Context, value *domain.Product) (*domain.Product, error) {
 	updated, err := r.next.Update(ctx, value)
 	if err == nil {
-		r.setIfNewer(ctx, updated)
+		r.invalidate(ctx, updated.ID())
 	}
 	return updated, err
 }
@@ -59,15 +63,15 @@ func (r *cachedRepository) Delete(ctx context.Context, id int64) error {
 	if err := r.next.Delete(ctx, id); err != nil {
 		return err
 	}
-	if err := r.cache.Delete(ctx, id); err != nil {
-		r.warn(ctx, "删除 Redis 商品缓存失败", err)
-	}
+	r.invalidate(ctx, id)
 	return nil
 }
 
-func (r *cachedRepository) setIfNewer(ctx context.Context, product *domain.Product) {
-	if err := r.cache.SetIfNewer(ctx, product); err != nil {
-		r.warn(ctx, "写入 Redis 商品缓存失败", err)
+func (r *cachedRepository) invalidate(ctx context.Context, id int64) {
+	// The database has committed. Give invalidation its own bounded cache timeout
+	// even if the HTTP client disconnected after that commit.
+	if err := r.cache.Invalidate(context.WithoutCancel(ctx), id); err != nil {
+		r.warn(ctx, "失效 Redis 商品缓存失败", err)
 	}
 }
 

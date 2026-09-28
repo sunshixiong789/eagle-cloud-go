@@ -74,6 +74,11 @@ func IdempotencyKey(v string) predicate.PurchaseOrder {
 	return predicate.PurchaseOrder(sql.FieldEQ(FieldIdempotencyKey, v))
 }
 
+// RequestFingerprint applies equality check predicate on the "request_fingerprint" field. It's identical to RequestFingerprintEQ.
+func RequestFingerprint(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldEQ(FieldRequestFingerprint, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.PurchaseOrder {
 	return predicate.PurchaseOrder(sql.FieldEQ(FieldStatus, v))
@@ -217,6 +222,71 @@ func IdempotencyKeyEqualFold(v string) predicate.PurchaseOrder {
 // IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
 func IdempotencyKeyContainsFold(v string) predicate.PurchaseOrder {
 	return predicate.PurchaseOrder(sql.FieldContainsFold(FieldIdempotencyKey, v))
+}
+
+// RequestFingerprintEQ applies the EQ predicate on the "request_fingerprint" field.
+func RequestFingerprintEQ(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldEQ(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintNEQ applies the NEQ predicate on the "request_fingerprint" field.
+func RequestFingerprintNEQ(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldNEQ(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintIn applies the In predicate on the "request_fingerprint" field.
+func RequestFingerprintIn(vs ...string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldIn(FieldRequestFingerprint, vs...))
+}
+
+// RequestFingerprintNotIn applies the NotIn predicate on the "request_fingerprint" field.
+func RequestFingerprintNotIn(vs ...string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldNotIn(FieldRequestFingerprint, vs...))
+}
+
+// RequestFingerprintGT applies the GT predicate on the "request_fingerprint" field.
+func RequestFingerprintGT(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldGT(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintGTE applies the GTE predicate on the "request_fingerprint" field.
+func RequestFingerprintGTE(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldGTE(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintLT applies the LT predicate on the "request_fingerprint" field.
+func RequestFingerprintLT(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldLT(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintLTE applies the LTE predicate on the "request_fingerprint" field.
+func RequestFingerprintLTE(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldLTE(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintContains applies the Contains predicate on the "request_fingerprint" field.
+func RequestFingerprintContains(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldContains(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintHasPrefix applies the HasPrefix predicate on the "request_fingerprint" field.
+func RequestFingerprintHasPrefix(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldHasPrefix(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintHasSuffix applies the HasSuffix predicate on the "request_fingerprint" field.
+func RequestFingerprintHasSuffix(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldHasSuffix(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintEqualFold applies the EqualFold predicate on the "request_fingerprint" field.
+func RequestFingerprintEqualFold(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldEqualFold(FieldRequestFingerprint, v))
+}
+
+// RequestFingerprintContainsFold applies the ContainsFold predicate on the "request_fingerprint" field.
+func RequestFingerprintContainsFold(v string) predicate.PurchaseOrder {
+	return predicate.PurchaseOrder(sql.FieldContainsFold(FieldRequestFingerprint, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

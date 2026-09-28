@@ -17,6 +17,8 @@ const (
 	FieldOwnerSubject = "owner_subject"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
 	FieldIdempotencyKey = "idempotency_key"
+	// FieldRequestFingerprint holds the string denoting the request_fingerprint field in the database.
+	FieldRequestFingerprint = "request_fingerprint"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldTotalCents holds the string denoting the total_cents field in the database.
@@ -32,6 +34,7 @@ var Columns = []string{
 	FieldID,
 	FieldOwnerSubject,
 	FieldIdempotencyKey,
+	FieldRequestFingerprint,
 	FieldStatus,
 	FieldTotalCents,
 	FieldCreatedAt,
@@ -52,6 +55,10 @@ var (
 	OwnerSubjectValidator func(string) error
 	// IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
 	IdempotencyKeyValidator func(string) error
+	// DefaultRequestFingerprint holds the default value on creation for the "request_fingerprint" field.
+	DefaultRequestFingerprint string
+	// RequestFingerprintValidator is a validator for the "request_fingerprint" field. It is called by the builders before save.
+	RequestFingerprintValidator func(string) error
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
 	// TotalCentsValidator is a validator for the "total_cents" field. It is called by the builders before save.
@@ -78,6 +85,11 @@ func ByOwnerSubject(opts ...sql.OrderTermOption) OrderOption {
 // ByIdempotencyKey orders the results by the idempotency_key field.
 func ByIdempotencyKey(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIdempotencyKey, opts...).ToFunc()
+}
+
+// ByRequestFingerprint orders the results by the request_fingerprint field.
+func ByRequestFingerprint(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestFingerprint, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

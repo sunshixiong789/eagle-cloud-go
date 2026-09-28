@@ -21,6 +21,7 @@ func (PurchaseOrder) Fields() []ent.Field {
 		field.String("id").MaxLen(36).Unique().Immutable(),
 		field.String("owner_subject").MaxLen(128),
 		field.String("idempotency_key").MaxLen(64).Immutable(),
+		field.String("request_fingerprint").MaxLen(64).Default("").Immutable(),
 		field.String("status").MaxLen(32),
 		field.Int64("total_cents").Positive(),
 		field.Time("created_at").Default(time.Now).Immutable(),

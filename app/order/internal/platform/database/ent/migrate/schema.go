@@ -76,6 +76,7 @@ var (
 		{Name: "id", Type: field.TypeString, Unique: true, Size: 36},
 		{Name: "owner_subject", Type: field.TypeString, Size: 128},
 		{Name: "idempotency_key", Type: field.TypeString, Size: 64},
+		{Name: "request_fingerprint", Type: field.TypeString, Size: 64, Default: ""},
 		{Name: "status", Type: field.TypeString, Size: 32},
 		{Name: "total_cents", Type: field.TypeInt64},
 		{Name: "created_at", Type: field.TypeTime},
@@ -89,7 +90,7 @@ var (
 			{
 				Name:    "idx_purchase_order_owner_created",
 				Unique:  false,
-				Columns: []*schema.Column{PurchaseOrderColumns[1], PurchaseOrderColumns[5]},
+				Columns: []*schema.Column{PurchaseOrderColumns[1], PurchaseOrderColumns[6]},
 			},
 			{
 				Name:    "uq_purchase_order_owner_idempotency",

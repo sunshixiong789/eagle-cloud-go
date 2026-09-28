@@ -5,9 +5,13 @@
 
 ## 发布与回滚
 
-推送 `v*` tag 或手动运行 `Release images` workflow。流水线先编译、测试并渲染全部
-部署组合，再为 admin、product、order 分别构建 amd64/arm64 镜像，生成 SBOM 和
-provenance、执行 HIGH/CRITICAL 漏洞扫描，最后输出不可变 digest。
+推送 `v*` tag 或手动运行 [Release images](../.github/workflows/release.yml)。流水线先运行
+[CI](../.github/workflows/ci.yml) 的生成差异、兼容性、编译、真实依赖测试和部署渲染检查，
+再为 admin、product、order 分别构建 amd64/arm64 镜像，生成 SBOM 和 provenance。
+候选镜像先上传 GHCR 的 `candidate-*` 标签，两个架构的 HIGH/CRITICAL 漏洞扫描均通过后，
+才发布版本标签并输出不可变 digest；候选标签不得部署，失败候选由 registry 生命周期策略清理。
+手动触发使用 `sha-<commit>` 版本。需在仓库配置 packages 写权限、分支保护和 `release` environment；
+生产 overlay 仍由环境仓库更新，这些工作流不直接部署生产，也不代表已安装镜像签名准入策略。
 
 镜像发布与环境部署刻意分离。生产由 GitOps 仓库把 overlay 中的镜像改为 digest，
 按“expand migration Job → Deployment 滚动 → 指标观察 → contract migration”推进。
@@ -36,7 +40,9 @@ NetworkPolicy 同时做 L3/L4 限制。数据库、RabbitMQ、Redis、OIDC 和 S
 
 ## MQ 一致性和运维闭环
 
-order 在业务事务内写 Outbox，relay 使用 publisher confirm 投递；admin 消费端使用 Inbox
+order 在业务事务内写 Outbox，relay 使用 mandatory 发布并同时检查 return 与 publisher confirm。
+不存在队列绑定时按失败处理、保留 Outbox 重试；每次发布含连接与确认等待最多 5 秒，短于 30 秒租约。
+首次部署应先创建消费拓扑或启动消费者，再开放业务流量。admin 消费端使用 Inbox
 去重。失败采用指数退避，20 次仍失败会写入 `failed_at` 停止自动重试，避免毒消息持续冲击。
 发布成功记录保留 7 天，Inbox 保留 30 天。重要业务若允许超过 30 天重复投递，应提高 Inbox
 保留期。
@@ -49,7 +55,7 @@ EAGLE_DATABASE_DSN='postgres://...' ./bin/outboxctl -command retry -id EVENT_ID 
 ```
 
 先定位 broker、schema、下游或数据问题并修复，再重试。不要批量直接改表。检查 DLQ 不会 ack
-消息；显式 redrive 使用 publisher confirm，成功后才 ack 原消息：
+消息；显式 redrive 复用 mandatory/return/confirm 发布器，确认已路由后才 ack 原消息：
 
 ```bash
 EAGLE_MESSAGING_RABBITMQ_URL='amqps://...' ./bin/mqctl \
@@ -59,6 +65,7 @@ EAGLE_MESSAGING_RABBITMQ_URL='amqps://...' ./bin/mqctl \
   -exchange eagle.events -routing-key order.created.v1 -limit 20 -yes
 ```
 
+消费中正常停机或取消上下文时关闭 channel，由 broker 重入队，不把停机当作毒消息送入 DLQ。
 Redrive 前确认消费者已向前兼容事件版本。RabbitMQ 生产集群应启用 quorum queue、跨可用区
 副本、磁盘/内存水位告警和 definitions 备份；这些属于 broker 平台配置，不由应用启动时创建。
 
@@ -112,3 +119,14 @@ RTO ≤ 60 分钟；对象存储 RPO 由供应商复制策略定义。每半年�
 - Secret 由 External Secrets/Vault 提供并轮换，禁止把填值后的示例提交到仓库。
 - 所有镜像以 digest 部署，集群启用准入策略校验签名/provenance 和禁止特权容器。
 - HPA、限流、熔断、资源 requests/limits 必须用容量测试校准，不把示例阈值直接视为生产容量。
+
+## 授权和缓存故障边界
+
+`EAGLE_UPSTREAM_AUTHORIZATION_MAX_STALENESS` 控制策略有效期，默认 `15s`，必须不小于刷新周期。
+超过有效期，普通权限请求拒绝；内部白名单请求与既有超管角色语义不变。修改该参数前记录可接受的
+撤权延迟；延长有效期会延长旧授权可用窗口。恢复后同版本成功确认即可恢复服务，倒退版本不延长有效期。
+
+生产 Redis 默认启用 TLS。公共 CA 使用系统根；私有 CA 通过只读 Secret 卷挂载并设置
+`EAGLE_CACHE_REDIS_TLS_CA_FILE`。`TLS_SERVER_NAME` 必须是证书 SAN 中的名称，不提供跳过验签选项。
+CA、密码和服务凭据修改后滚动重启实例；当前客户端不声称支持凭据热加载。
+可用 `EAGLE_CACHE_REDIS_ENABLED=false` 临时关闭缓存。恢复缓存后观察数据库负载回落、延迟和错误日志。

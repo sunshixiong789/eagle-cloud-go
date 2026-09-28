@@ -58,19 +58,24 @@ const (
 var testDSN string
 
 func TestMain(m *testing.M) {
+	os.Exit(runTests(m))
+}
+
+// Return before os.Exit so database and process cleanup always run.
+func runTests(m *testing.M) int {
 	flag.Parse()
 	if testing.Short() {
-		os.Exit(m.Run())
+		return m.Run()
 	}
 
 	pg, err := testkit.StartPostgres("e2e", "eagle_e2e")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "e2e 环境准备失败: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer func() { _ = pg.Close() }()
 	testDSN = pg.DSN
-	os.Exit(m.Run())
+	return m.Run()
 }
 
 // testEnv 是一次测试用的完整服务实例。

@@ -415,7 +415,15 @@ Keycloak 负责“你是谁、有哪些角色”，Casbin 负责“角色能不�
 
 服务间调用使用 Keycloak OAuth2 Client Credentials。调用方缓存短期 access token，公共客户端中间件负责注入 Bearer token；内部 RPC 只接受 `ACCESS_LEVEL_INTERNAL`，并校验 token 的服务身份及 `internal_client_ids` 白名单。开发用的 `eagle-worker` secret 只存在于本地配置，生产必须由 Secret Manager 注入并为每个调用方使用独立 client。
 
+订单创建的 `idempotency_key` 在当前主体范围内唯一。相同键和相同商品/数量会直接返回已完成订单，
+即使商品已经下架或商品服务不可用；同一键用于不同请求返回 409 `ERROR_REASON_IDEMPOTENCY_CONFLICT`。
+商品项的顺序不影响请求身份。请求摘要与订单、Outbox 同事务保存，滚动升级中的旧订单从不可变明细恢复摘要。
+
 同步调用默认启用 tracing、客户端指标、metadata 传播和熔断。只有明确幂等的读请求才按配置做有限重试；写请求不能仅靠重试解决一致性。订单事件使用“数据库事务 + Outbox + RabbitMQ publisher confirm”，消费端用 Inbox 去重并在处理成功后 ack，提供至少一次投递语义。
+
+product 每 5 秒刷新策略，默认允许使用最近 15 秒内成功确认的快照。超过有效期后，
+依赖策略的请求直接拒绝；内部商品查询继续按服务身份白名单鉴权，readiness 不因策略过期而撤销。
+这避免权限控制面故障连带中断已认证服务的下单查询。首次加载失败仍拒绝启动，不能以空策略运行。
 
 授权失败遵循关闭原则：未认证返回 401，无权限返回 403，远程判定异常不会自动放行。`realm` 角色和各服务 `client` 角色具有独立命名空间，同名也不会串权。
 
@@ -436,6 +444,10 @@ Keycloak 负责“你是谁、有哪些角色”，Casbin 负责“角色能不�
 | `EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT` | product 到 admin 的 gRPC 地址 |
 | `EAGLE_UPSTREAM_PRODUCT_ENDPOINT` | order 到 product 的 gRPC 地址 |
 | `EAGLE_CACHE_REDIS_ADDRESS` / `PASSWORD` | product 商品缓存 |
+| `EAGLE_CACHE_REDIS_ENABLED` | 可选缓存开关；不可用时启动和查询均回退数据库 |
+| `EAGLE_CACHE_REDIS_TLS_ENABLED` / `TLS_CA_FILE` / `TLS_SERVER_NAME` | Redis TLS、私有 CA 文件、证书主机名 |
+| `EAGLE_CACHE_REDIS_OPERATION_TIMEOUT` | 缓存单次操作预算，默认 `0.2s` |
+| `EAGLE_UPSTREAM_AUTHORIZATION_MAX_STALENESS` | 授权快照最大陈旧时间，默认 `15s` |
 | `EAGLE_MESSAGING_RABBITMQ_URL` | 订单事件发布与通知消费 |
 | `EAGLE_FILE_PROVIDER` | `local` 或 `s3` |
 | `EAGLE_FILE_S3_ENDPOINT` / `BUCKET` / `ACCESS_KEY` / `SECRET_KEY` | S3/OSS/MinIO 连接配置 |
@@ -502,7 +514,7 @@ Grafana 位于 `http://127.0.0.1:3000`，Prometheus 位于 `http://127.0.0.1:909
 
 ### Windows 上 `go test -race` 报 cgo 错误
 
-race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用的 C 工具链；CI 会在 Linux 上执行完整 `make test`。
+race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用的 C 工具链；CI 会在 Linux 上执行完整 `make test`，并提供真实 Redis/RabbitMQ 测试服务。
 
 ## 文档与约束
 
@@ -516,3 +528,16 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 - [AI 编码约束](AGENTS.md)：常驻硬约束；细则在 [`.agents/rules/`](.agents/rules/)
 
 规则文件服务于 AI 协作，不替代面向开发者的 README 和专题文档。
+
+## 交付与生产验收
+
+[CI](.github/workflows/ci.yml) 检查生成代码、API 兼容性、lint、race、真实适配器、迁移、分层和镜像构建。
+[Release images](.github/workflows/release.yml) 生成带 SBOM/provenance 的候选镜像，分别扫描 amd64/arm64 后才发布版本标签。
+工作流固定 action 提交，由 Dependabot 提交升级。启用分支保护与 `release` environment 规则后才能形成强制门禁；配置文件本身不会修改仓库设置。
+
+本地通过 `make build-independent` 检查关闭 Workspace 时每个模块仍能编译。
+设置隔离测试服务的 `EAGLE_TEST_REDIS_ADDRESS` 和 `EAGLE_TEST_RABBITMQ_URL` 后执行 `make test-adapters`，
+验证无路由消息、断线重发、消费停机、缓存并发与 TLS。未提供地址时普通测试跳过这些外部适配测试，
+`test-adapters` 会明确失败，不能把跳过算作通过。
+
+底座定位、Wire 维护计划、新服务接入步骤与生产演练验收见[平台落地约定](docs/platform-readiness.md)。

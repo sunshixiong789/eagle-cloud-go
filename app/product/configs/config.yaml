@@ -55,6 +55,7 @@ upstream:
   max_attempts: 2
   retry_backoff: 0.1s
   authorization_refresh_interval: 5s
+  authorization_max_staleness: "${UPSTREAM_AUTHORIZATION_MAX_STALENESS:15s}"
 
 service_auth:
   token_url: "${SERVICE_AUTH_TOKEN_URL:http://127.0.0.1:8080/realms/eagle/protocol/openid-connect/token}"
@@ -63,12 +64,16 @@ service_auth:
 
 cache:
   redis:
-    enabled: true
+    enabled: "${CACHE_REDIS_ENABLED:true}"
     address: "${CACHE_REDIS_ADDRESS:127.0.0.1:6379}"
     username: "${CACHE_REDIS_USERNAME:}"
     password: "${CACHE_REDIS_PASSWORD:eagle}"
     database: 0
     ttl: 60s
+    tls_enabled: "${CACHE_REDIS_TLS_ENABLED:false}"
+    tls_ca_file: "${CACHE_REDIS_TLS_CA_FILE:}"
+    tls_server_name: "${CACHE_REDIS_TLS_SERVER_NAME:}"
+    operation_timeout: "${CACHE_REDIS_OPERATION_TIMEOUT:0.2s}"
 
 observability:
   # 指向本地 obs profile 里的 OTel Collector。

@@ -21,6 +21,8 @@ type PurchaseOrder struct {
 	OwnerSubject string `json:"owner_subject,omitempty"`
 	// IdempotencyKey holds the value of the "idempotency_key" field.
 	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	// RequestFingerprint holds the value of the "request_fingerprint" field.
+	RequestFingerprint string `json:"request_fingerprint,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// TotalCents holds the value of the "total_cents" field.
@@ -37,7 +39,7 @@ func (*PurchaseOrder) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case purchaseorder.FieldTotalCents:
 			values[i] = new(sql.NullInt64)
-		case purchaseorder.FieldID, purchaseorder.FieldOwnerSubject, purchaseorder.FieldIdempotencyKey, purchaseorder.FieldStatus:
+		case purchaseorder.FieldID, purchaseorder.FieldOwnerSubject, purchaseorder.FieldIdempotencyKey, purchaseorder.FieldRequestFingerprint, purchaseorder.FieldStatus:
 			values[i] = new(sql.NullString)
 		case purchaseorder.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -73,6 +75,12 @@ func (_m *PurchaseOrder) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
 			} else if value.Valid {
 				_m.IdempotencyKey = value.String
+			}
+		case purchaseorder.FieldRequestFingerprint:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field request_fingerprint", values[i])
+			} else if value.Valid {
+				_m.RequestFingerprint = value.String
 			}
 		case purchaseorder.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -133,6 +141,9 @@ func (_m *PurchaseOrder) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("idempotency_key=")
 	builder.WriteString(_m.IdempotencyKey)
+	builder.WriteString(", ")
+	builder.WriteString("request_fingerprint=")
+	builder.WriteString(_m.RequestFingerprint)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
