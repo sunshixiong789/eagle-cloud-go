@@ -9,7 +9,6 @@ require (
 	github.com/eagle-go/eagle/tests v0.0.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-kratos/kratos/v3 v3.0.0
-	github.com/google/wire v0.7.0
 	github.com/minio/minio-go/v7 v7.3.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/metric v1.45.0

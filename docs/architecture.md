@@ -17,7 +17,7 @@ admin 不是业务流量网关。它组合四个基础模块，是因为这些�
 ## 目录表达什么
 
     api/eagle/<module>/v1                         跨进程契约（独立 Go module）
-    app/<service>/cmd/<service>                   进程入口和唯一组合根（Wire）
+    app/<service>/cmd/<service>                   进程入口和唯一组合根（手写构造器装配）
     app/<service>/internal/<module>               服务拥有的业务模块
     app/<service>/internal/platform/database/ent  服务独占的 Ent Client
     app/<service>/migrations                      服务独占的数据库迁移
@@ -27,7 +27,7 @@ admin 不是业务流量网关。它组合四个基础模块，是因为这些�
     tests                                         架构测试与跨模块测试工具
     deploy                                        本地与生产部署资源
 
-`app/<service>/internal` 是 Go 的编译器可见性边界：其他服务连实现包都无法 import。服务边界同时由独立 module、入口、Ent Client、数据库、API 调用和架构测试保证。根 `go.work` 只组合本地开发工作区，每个模块的依赖仍由自己的 `go.mod/go.sum` 管理。进程对象图由该服务 `cmd/<service>` 的 Wire injector 生成；`google/wire` 不能进入业务四层。
+`app/<service>/internal` 是 Go 的编译器可见性边界：其他服务连实现包都无法 import。服务边界同时由独立 module、入口、Ent Client、数据库、API 调用和架构测试保证。根 `go.work` 只组合本地开发工作区，每个模块的依赖仍由自己的 `go.mod/go.sum` 管理。进程对象图在该服务 `cmd/<service>/app.go` 的 `buildApp` 中通过显式构造器装配，协议注册放在相邻的 `server.go`。初始化失败时释放已创建资源，正常退出时先停止后台任务，再按依赖逆序关闭客户端和数据库；不引入 DI 生成器或运行时容器。
 
 ## 模块内渐进式分层
 

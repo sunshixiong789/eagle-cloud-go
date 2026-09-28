@@ -65,16 +65,9 @@ migrate-down:
 migrate-status:
 	$(GOOSE) -dir $(MIGRATION_DIR) postgres "$(EAGLE_DSN)" status
 
-.PHONY: wire
-# 为每个服务组合根生成 Wire 注入代码
-wire:
-	@for service in $(SERVICES); do \
-		go -C app/$$service run github.com/google/wire/cmd/wire ./cmd/$$service || exit 1; \
-	done
-
 .PHONY: generate
-# 全量生成：对外契约 + 内部配置 + Ent + Wire
-generate: api config ent wire tidy
+# 全量生成：对外契约 + 内部配置 + Ent
+generate: api config ent tidy
 
 .PHONY: build
 # 编译全部可部署服务到 bin/

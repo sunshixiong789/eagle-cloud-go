@@ -3,28 +3,85 @@ package main
 import (
 	"log/slog"
 
+	"github.com/go-kratos/kratos/v3/transport"
+
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
 	filev1 "github.com/eagle-go/eagle/api/eagle/file/v1"
 	notificationv1 "github.com/eagle-go/eagle/api/eagle/notification/v1"
+	accessapp "github.com/eagle-go/eagle/app/admin/internal/access/application"
 	accessdomain "github.com/eagle-go/eagle/app/admin/internal/access/domain"
+	accessinfra "github.com/eagle-go/eagle/app/admin/internal/access/infrastructure"
+	accessservice "github.com/eagle-go/eagle/app/admin/internal/access/service"
 	dictionarydomain "github.com/eagle-go/eagle/app/admin/internal/dictionary/domain"
+	dictionaryinfra "github.com/eagle-go/eagle/app/admin/internal/dictionary/infrastructure"
+	dictionaryservice "github.com/eagle-go/eagle/app/admin/internal/dictionary/service"
+	fileapp "github.com/eagle-go/eagle/app/admin/internal/file/application"
 	filedomain "github.com/eagle-go/eagle/app/admin/internal/file/domain"
+	fileinfra "github.com/eagle-go/eagle/app/admin/internal/file/infrastructure"
+	fileservice "github.com/eagle-go/eagle/app/admin/internal/file/service"
+	notificationapp "github.com/eagle-go/eagle/app/admin/internal/notification/application"
 	notificationdomain "github.com/eagle-go/eagle/app/admin/internal/notification/domain"
+	notificationinfra "github.com/eagle-go/eagle/app/admin/internal/notification/infrastructure"
+	notificationservice "github.com/eagle-go/eagle/app/admin/internal/notification/service"
+	platformdb "github.com/eagle-go/eagle/app/admin/internal/platform/database"
 	"github.com/eagle-go/eagle/pkg/platform/config"
 	platformruntime "github.com/eagle-go/eagle/pkg/platform/runtime"
 	"github.com/eagle-go/eagle/pkg/platform/server"
 )
 
-//go:generate go run github.com/google/wire/cmd/wire
-
 func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Components, error) {
-	components, cleanup, err := wireApp(bc, logger)
+	db, closeDB, err := platformdb.Open(bc.GetData())
 	if err != nil {
 		return platformruntime.Components{}, err
 	}
-	components.Cleanup = cleanup
-	return components, nil
+	policyStore := accessinfra.NewPolicyStore(db)
+	enforcer, err := accessinfra.NewEnforcer(policyStore)
+	if err != nil {
+		closeDB()
+		return platformruntime.Components{}, err
+	}
+	ms, err := server.NewMiddlewares(logger, server.NewVerifier(bc.GetAuth()), enforcer, bc.GetAuth(), adminErrorMappings()...)
+	if err != nil {
+		closeDB()
+		return platformruntime.Components{}, err
+	}
+	blobs, err := fileinfra.NewBlobStore(bc.GetFile())
+	if err != nil {
+		closeDB()
+		return platformruntime.Components{}, err
+	}
+
+	permissions := accessinfra.NewPermissionRepo(db)
+	policies := accessinfra.NewPolicyRepo(enforcer, policyStore)
+	permission := accessservice.NewPermissionService(accessapp.NewPermissionUsecase(permissions, policies))
+	role := accessservice.NewRoleBindingService(accessapp.NewRoleBindingUsecase(policies, permissions))
+	authorization := accessservice.NewAuthorizationService(accessinfra.NewAuthorizationChecker(enforcer, policyStore))
+	dict := dictionaryservice.NewDictService(dictionaryinfra.NewDictRepo(db))
+	files := fileapp.NewUsecase(fileinfra.NewRepository(db), blobs, bc.GetFile().GetMaxSizeBytes())
+	file := fileservice.NewFileService(files)
+	notifications := notificationapp.NewUsecase(notificationinfra.NewRepository(db))
+	notification := notificationservice.NewNotificationService(notifications)
+	gs := newGRPCServer(bc.GetServer(), ms, permission, role, authorization, dict, file, notification)
+	hs := newHTTPServer(bc.GetServer(), ms, bc.GetFile(), permission, role, dict, file, notification)
+
+	// 所有可能失败的初始化完成后，再启动后台任务。
+	unregisterPolicyHealth := accessinfra.RegisterPolicyHealth(policyStore, enforcer)
+	stopPolicyReconciler := accessinfra.NewPolicyReconciler(policyStore, enforcer, logger)
+	stopConsumer := notificationservice.NewOrderCreatedConsumer(bc.GetMessaging().GetRabbitmq(), notifications, logger)
+	stopInboxJanitor := notificationinfra.NewInboxJanitor(db, logger)
+	stopFileCleanup := fileservice.NewCleanupWorker(files, logger)
+	return platformruntime.Components{
+		Servers: []transport.Server{gs, hs},
+		Cleanup: func() {
+			stopFileCleanup()
+			stopInboxJanitor()
+			stopConsumer()
+			stopPolicyReconciler()
+			unregisterPolicyHealth()
+			closeDB()
+		},
+	}, nil
 }
 
 func adminErrorMappings() []server.ErrorMappingRule {

@@ -15,7 +15,7 @@
 
 ```text
 app/<service>/
-├── cmd/<service>               # 进程入口和 Wire 组合根
+├── cmd/<service>               # 进程入口和手写组合根
 ├── internal/<module>/
 │   ├── service                 # 入站适配：Protobuf、消息消费和任务入口
 │   ├── application             # 可选；只在存在用例编排时创建
@@ -52,7 +52,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 
 ## 服务与数据边界
 
-- 每个 `app/<service>` 独立拥有 `go.mod`、入口、配置、Ent Client、迁移和数据库。组合根只能装配当前服务拥有的模块，Wire 只允许出现在 `cmd/<service>`。
+- 每个 `app/<service>` 独立拥有 `go.mod`、入口、配置、Ent Client、迁移和数据库。组合根只能装配当前服务拥有的模块，在 `cmd/<service>` 中显式调用构造器；初始化失败时释放已创建资源，正常退出时按依赖逆序清理，不引入 DI 生成器或运行时容器。
 - 服务之间禁止 import 对方 `app/` 实现、查询对方数据库、建立跨服务外键或事务。同步调用只依赖 `api/` 契约，异步协作使用已定义事件。
 - 跨服务客户端放在调用方模块的 `infrastructure`，由它实现本模块 domain 端口；domain/application 不接触生成的 Protobuf client。
 - `pkg/` 只放无业务语义、可被多个服务复用的技术能力，禁止 import `app/`。业务模型留在拥有它的模块。
@@ -62,7 +62,7 @@ DDD 用来保护边界和不变量，不用来增加代码量：
 - API 先改 `api/**/*.proto`。每个 RPC 必须显式声明 `access`；需要权限时同时声明 `perm`。鉴权由中间件完成，handler 不写重复鉴权分支。
 - Keycloak 负责用户和角色，本仓库不建用户表。当前主体统一从 `pkg/identity` 获取，不自行解析 JWT 或创建第二套 Principal。
 - 表结构通过服务内 Ent schema 表达，生产迁移通过同一服务的 goose SQL 表达；禁止跨服务共享 Ent Client 或迁移目录。
-- 只修改源文件。禁止手改 `*.pb.go`、`internal/platform/database/ent/`、`wire_gen.go` 等生成文件；分别通过 `make api`、`make ent`、`make wire` 或 `make generate` 生成。
+- 只修改源文件。禁止手改 `*.pb.go`、`internal/platform/database/ent/` 等生成文件；分别通过 `make api`、`make config`、`make ent` 或 `make generate` 生成。
 
 ## 质量底线
 

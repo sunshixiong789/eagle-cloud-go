@@ -8,7 +8,6 @@ require (
 	github.com/eagle-go/eagle/pkg v0.0.0
 	github.com/eagle-go/eagle/tests v0.0.0
 	github.com/go-kratos/kratos/v3 v3.0.0
-	github.com/google/wire v0.7.0
 	github.com/rabbitmq/amqp091-go v1.14.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/metric v1.45.0

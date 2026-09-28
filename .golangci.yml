@@ -31,7 +31,7 @@ linters:
   exclusions:
     rules:
       # 生成代码不做检查
-      - path: '(\.pb\.go|\.pb\.web\.go|wire_gen\.go|/sqlc/)'
+      - path: '(\.pb\.go|\.pb\.web\.go|/sqlc/)'
         linters:
           - all
       # 测试里允许硬编码凭据和裸 error 比较

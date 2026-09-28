@@ -193,6 +193,7 @@ func TestInfrastructureBoundaries(t *testing.T) {
 // 这些库是 AI 生成代码时最常顺手引进、但本仓库已明确拒绝的。
 // 标准库 slices/maps/cmp、encoding/json、errors、log/slog 已经覆盖对应需求。
 var bannedModulePrefixes = []string{
+	"github.com/google/wire", // 组合根使用显式构造器装配。
 	"github.com/samber/lo",
 	"github.com/duke-git/lancet",
 	"github.com/jinzhu/copier",
@@ -206,21 +207,6 @@ var bannedModulePrefixes = []string{
 	"github.com/go-redis/redis/v8",
 	"github.com/go-redis/redis/v7",
 	"github.com/redis/go-redis",
-}
-
-func TestWireOnlyInCompositionRoot(t *testing.T) {
-	root := repositoryRoot()
-	for _, service := range discoverServices(t, root) {
-		for _, pkg := range listPackages(t, root, "./app/"+service+"/...") {
-			usesWire := slices.Contains(pkg.Imports, "github.com/google/wire")
-			if !usesWire {
-				continue
-			}
-			if !strings.HasSuffix(pkg.ImportPath, "/cmd/"+service) {
-				t.Errorf("%s imports github.com/google/wire; Wire stays in app/%s/cmd/%s", pkg.ImportPath, service, service)
-			}
-		}
-	}
 }
 
 func TestBannedDependencies(t *testing.T) {

@@ -2,7 +2,7 @@
 
 基于 Go Workspace 的 Kratos 微服务开发底座，提供 OIDC 认证、集中 RBAC、服务间认证、缓存、可靠事件、对象存储与完整可观测性，并用商品、订单演示服务独立数据库、同步调用和异步事件。
 
-技术栈：Go 1.27、Kratos v3、Google Wire、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、Redis、RabbitMQ、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
+技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、Redis、RabbitMQ、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
 
 ## 项目现状
 
@@ -132,7 +132,7 @@ make init
 make generate
 ```
 
-`make init` 会下载并验证锁定版本的开发工具。`make generate` 依次生成 API、配置、各服务 Ent 和组合根 Wire 代码，再整理所有模块依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应出现新的差异。
+`make init` 会下载并验证锁定版本的开发工具。`make generate` 依次生成 API、配置和各服务 Ent 代码，再整理所有模块依赖。生成文件已经提交到仓库；无源文件变更时，执行后 `git status` 不应出现新的差异。
 
 ### 3. 启动完整本地环境
 
@@ -246,7 +246,7 @@ make help
 make init
 ```
 
-生成 API、配置、Ent、Wire 并整理依赖：
+生成 API、配置、Ent 并整理依赖：
 
 ```bash
 make generate
@@ -335,7 +335,7 @@ go test -short ./app/admin/... ./app/product/... ./app/order/... ./pkg/...
 3. 新权限码通过 admin 的 goose 迁移写入 `permission_definition`。
 4. 执行 `make api`，不要手改 `*.pb.go`。
 5. 按用例复杂度选择 `service -> domain <- infrastructure` 或 `service -> application -> domain <- infrastructure`。
-6. 只有新增一个 Protobuf Service 时，才在 `app/<service>/cmd/<service>` 的 Wire provider 里注册。
+6. 只有新增一个 Protobuf Service 时，才在 `app/<service>/cmd/<service>` 的 `server.go` 中注册 HTTP/gRPC 服务。
 7. 添加测试并执行 `make lint && make test`。
 
 需要权限的 RPC 示例：
@@ -404,7 +404,7 @@ subject := identity.Subject(ctx)
 4. 在 `api/` 定义 RPC、校验规则、HTTP 映射和访问级别，然后执行 `make api`。
 5. 在 `internal/<module>/domain` 放模型、规则和仓储/客户端接口。
 6. 仅在存在多端口、聚合变更、事务、幂等、补偿或多入口复用时在 `application` 编排用例；纯 CRUD 由 `service` 依赖 domain 端口。`infrastructure` 实现数据库或远程端口，`service` 只转换协议对象。
-7. 在 `app/<service>/cmd/<service>` 的 `providerSet` 装配新模块，然后执行 `make wire`。禁止手改 `wire_gen.go`。
+7. 在 `app/<service>/cmd/<service>/app.go` 的 `buildApp` 中显式调用构造器装配新模块；初始化失败时释放已创建资源，正常退出时按依赖逆序清理。
 8. 先测领域不变量，再测真实基础设施与 HTTP 链路。
 
 跨服务调用只能依赖 `api` 契约：禁止 import 其他服务实现、读取对方表、建立跨库外键或跨服务事务。简单 CRUD 不必为了形式引入聚合根、工厂或 DTO 体系。
@@ -510,7 +510,7 @@ Grafana 位于 `http://127.0.0.1:3000`，Prometheus 位于 `http://127.0.0.1:909
 
 ### 修改 proto 或 Ent schema 后行为不一致
 
-执行 `make api`、`make ent` 或 `make wire`，完整场景直接执行 `make generate`。生成文件禁止手改，CI 会检查生成结果和源定义是否一致。
+执行 `make api`、`make config` 或 `make ent`，完整场景直接执行 `make generate`。生成文件禁止手改，CI 会检查生成结果和源定义是否一致。
 
 ### Windows 上 `go test -race` 报 cgo 错误
 
@@ -540,4 +540,4 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 验证无路由消息、断线重发、消费停机、缓存并发与 TLS。未提供地址时普通测试跳过这些外部适配测试，
 `test-adapters` 会明确失败，不能把跳过算作通过。
 
-底座定位、Wire 维护计划、新服务接入步骤与生产演练验收见[平台落地约定](docs/platform-readiness.md)。
+底座定位、服务装配约定、新服务接入步骤与生产演练验收见[平台落地约定](docs/platform-readiness.md)。
