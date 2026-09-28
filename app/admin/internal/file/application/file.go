@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"time"
 
@@ -41,8 +40,9 @@ func (uc *Usecase) Upload(ctx context.Context, owner, name, contentType string, 
 		return nil, err
 	}
 	if err := uc.blobs.Put(ctx, pending.StorageKey(), content); err != nil {
-		cleanupErr := uc.repo.DeleteMetadata(ctx, pending.ID())
-		return nil, errors.Join(err, cleanupErr)
+		// A failed response does not prove the object was not committed. Keep the
+		// pending record so cleanup can delete both the object and its metadata.
+		return nil, err
 	}
 	ready, err := uc.repo.MarkReady(ctx, pending.ID())
 	if err != nil {

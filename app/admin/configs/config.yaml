@@ -64,8 +64,8 @@ messaging:
   rabbitmq:
     enabled: true
     url: "${MESSAGING_RABBITMQ_URL:amqp://eagle:eagle@127.0.0.1:5672/}"
-    exchange: eagle.events
-    order_created_queue: eagle.admin.order-created.v1
+    exchange: "${MESSAGING_EXCHANGE:eagle.events}"
+    order_created_queue: "${MESSAGING_ORDER_CREATED_QUEUE:eagle.admin.order-created.v2}"
     reconnect_backoff: 2s
     consumer_max_attempts: 5
     consumer_retry_backoff: 1s

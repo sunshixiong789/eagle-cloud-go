@@ -30,17 +30,13 @@ type Enforcer struct {
 // adapter 传 nil 时策略只存在于内存中，不做持久化。
 // 这条路径供测试使用，也适用于策略完全由配置下发、无需运行时修改的部署。
 func NewEnforcer(adapter persist.Adapter) (*Enforcer, error) {
-	e, err := buildCasbinEnforcer(context.Background(), adapter)
+	e, version, err := buildCasbinEnforcer(context.Background(), adapter)
 	if err != nil {
 		return nil, err
 	}
 
 	en := &Enforcer{e: e, adapter: adapter}
-	if versioned, ok := adapter.(interface {
-		LoadedPolicyVersion() int64
-	}); ok {
-		en.loadedVersion.Store(versioned.LoadedPolicyVersion())
-	}
+	en.loadedVersion.Store(version)
 	return en, nil
 }
 
@@ -48,10 +44,14 @@ type contextPolicyLoader interface {
 	LoadPolicyContext(context.Context, model.Model) error
 }
 
-func buildCasbinEnforcer(ctx context.Context, adapter persist.Adapter) (*casbin.Enforcer, error) {
+type versionedPolicyLoader interface {
+	LoadPolicySnapshot(context.Context, model.Model) (int64, error)
+}
+
+func buildCasbinEnforcer(ctx context.Context, adapter persist.Adapter) (*casbin.Enforcer, int64, error) {
 	m, err := model.NewModelFromString(ModelText)
 	if err != nil {
-		return nil, fmt.Errorf("authz: 解析 Casbin 模型: %w", err)
+		return nil, 0, fmt.Errorf("authz: 解析 Casbin 模型: %w", err)
 	}
 
 	// 先创建空判定器，再用携带请求 context 的加载器填充策略。
@@ -59,27 +59,30 @@ func buildCasbinEnforcer(ctx context.Context, adapter persist.Adapter) (*casbin.
 	// 只能退化成 context.Background，无法响应超时和应用退出。
 	e, err := casbin.NewEnforcer(m)
 	if err != nil {
-		return nil, fmt.Errorf("authz: 构造 Casbin enforcer: %w", err)
+		return nil, 0, fmt.Errorf("authz: 构造 Casbin enforcer: %w", err)
 	}
 
+	var version int64
 	if adapter != nil {
-		if loader, ok := adapter.(contextPolicyLoader); ok {
+		if loader, ok := adapter.(versionedPolicyLoader); ok {
+			version, err = loader.LoadPolicySnapshot(ctx, m)
+		} else if loader, ok := adapter.(contextPolicyLoader); ok {
 			err = loader.LoadPolicyContext(ctx, m)
 		} else {
 			err = adapter.LoadPolicy(m)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("authz: 加载策略: %w", err)
+			return nil, 0, fmt.Errorf("authz: 加载策略: %w", err)
 		}
 		e.SetAdapter(adapter)
 		// 持久化写入只允许走 Replace* / *IfVersion，避免 Casbin AutoSave
 		// 绕过版本号和审计。
 		e.EnableAutoSave(false)
 		if err := e.BuildRoleLinks(); err != nil {
-			return nil, fmt.Errorf("authz: 构建角色继承: %w", err)
+			return nil, 0, fmt.Errorf("authz: 构建角色继承: %w", err)
 		}
 	}
-	return e, nil
+	return e, version, nil
 }
 
 // Allow 判断任一角色是否被授予了该权限码。
@@ -113,7 +116,7 @@ func (en *Enforcer) AllowContext(ctx context.Context, roles []string, perm strin
 // ReloadPolicy 从存储重新加载全部策略。
 // 后台调整角色权限后调用，使变更立即生效而不必重启服务。
 func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
-	replacement, err := buildCasbinEnforcer(ctx, en.adapter)
+	replacement, version, err := buildCasbinEnforcer(ctx, en.adapter)
 	if err != nil {
 		recordPolicyReload(ctx, "error")
 		return err
@@ -121,13 +124,11 @@ func (en *Enforcer) ReloadPolicy(ctx context.Context) error {
 
 	en.mu.Lock()
 	defer en.mu.Unlock()
-	en.e = replacement
-
-	if versioned, ok := en.adapter.(interface {
-		LoadedPolicyVersion() int64
-	}); ok {
-		en.loadedVersion.Store(versioned.LoadedPolicyVersion())
+	if version < en.loadedVersion.Load() {
+		return ErrPolicyVersionRegressed
 	}
+	en.e = replacement
+	en.loadedVersion.Store(version)
 	recordPolicyReload(ctx, "success")
 	return nil
 }
@@ -155,9 +156,12 @@ func (en *Enforcer) ReplacePolicySnapshot(ctx context.Context, rows []StoredPoli
 	}
 
 	en.mu.Lock()
+	defer en.mu.Unlock()
+	if version < en.loadedVersion.Load() {
+		return ErrPolicyVersionRegressed
+	}
 	en.e = replacement
 	en.loadedVersion.Store(version)
-	en.mu.Unlock()
 	recordPolicyReload(ctx, "success")
 	return nil
 }

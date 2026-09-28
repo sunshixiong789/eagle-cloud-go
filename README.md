@@ -449,8 +449,15 @@ product 每 5 秒刷新策略，默认允许使用最近 15 秒内成功确认�
 | `EAGLE_CACHE_REDIS_OPERATION_TIMEOUT` | 缓存单次操作预算，默认 `0.2s` |
 | `EAGLE_UPSTREAM_AUTHORIZATION_MAX_STALENESS` | 授权快照最大陈旧时间，默认 `15s` |
 | `EAGLE_MESSAGING_RABBITMQ_URL` | 订单事件发布与通知消费 |
+| `EAGLE_MESSAGING_EXCHANGE` / `ORDER_CREATED_QUEUE` | 事件 exchange / 通知 quorum 队列名，默认 `eagle.events` / `eagle.admin.order-created.v2` |
 | `EAGLE_FILE_PROVIDER` | `local` 或 `s3` |
 | `EAGLE_FILE_S3_ENDPOINT` / `BUCKET` / `ACCESS_KEY` / `SECRET_KEY` | S3/OSS/MinIO 连接配置 |
+
+文件上传的 gRPC 接收上限随 `file.max_size_bytes` 配置，并预留 64 KiB 协议开销；业务层仍按原始
+文件大小校验。下载大于 4 MiB 的文件时，Go gRPC 客户端需设置 `grpc.MaxCallRecvMsgSize`，
+至少为文件上限加 64 KiB。S3 在实际操作时连接，单次操作最多 5 秒且遵从更短的请求 deadline；
+存储故障不阻断 admin 启动，上传结果不确定时保留 pending 记录，由清理任务重试删除。
+升级已有 RabbitMQ classic 队列前，先执行 [队列迁移步骤](docs/operations.md#从旧-classic-队列迁移)。
 
 所有 `google.protobuf.Duration` 只接受秒格式，例如 `3600s`、`0.5s`。`1h`、`30m`、`500ms` 会导致配置解析失败。
 

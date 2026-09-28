@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"math"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -216,5 +217,25 @@ func TestProductFailurePolicyConfiguration(t *testing.T) {
 	bc.Cache.Redis.TlsEnabled = true
 	if err := appconfig.Validate(bc, appconfig.Requirements{Redis: true}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFileLimitFitsGRPCMessage(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		size  int64
+		valid bool
+	}{
+		{"default", 10 << 20, true},
+		{"zero", 0, false},
+		{"overflow", math.MaxInt32 - appconfig.FileMessageOverhead + 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bc := &appconfig.Bootstrap{File: &appconfig.File{Provider: "local", LocalDir: "files", MaxSizeBytes: tc.size}}
+			err := appconfig.Validate(bc, appconfig.Requirements{File: true})
+			if (err == nil) != tc.valid {
+				t.Fatalf("size=%d valid=%v: %v", tc.size, tc.valid, err)
+			}
+		})
 	}
 }

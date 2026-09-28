@@ -64,7 +64,7 @@ groups:
           description: "{{ $labels.service_name }} p99 latency is {{ $value }} seconds."
 
       - alert: EagleRabbitMQBacklog
-        expr: rabbitmq_queue_messages_ready{queue="eagle.admin.order-created.v1"} > 100
+        expr: rabbitmq_queue_messages_ready{queue=~"eagle[.]admin[.]order-created[.]v[12]"} > 100
         for: 10m
         labels: {severity: warning}
         annotations:

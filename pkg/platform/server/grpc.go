@@ -10,8 +10,8 @@ import (
 // GRPCRegistrar lets each process register only the APIs it owns.
 type GRPCRegistrar func(*grpc.Server)
 
-func NewGRPCServer(c *config.Server, ms []middleware.Middleware, registrars ...GRPCRegistrar) *grpc.Server {
-	opts := []grpc.ServerOption{grpc.Middleware(ms...)}
+func NewGRPCServer(c *config.Server, ms []middleware.Middleware, options []grpc.ServerOption, registrars ...GRPCRegistrar) *grpc.Server {
+	opts := append([]grpc.ServerOption{grpc.Middleware(ms...)}, options...)
 	if n := c.GetGrpc().GetNetwork(); n != "" {
 		opts = append(opts, grpc.Network(n))
 	}

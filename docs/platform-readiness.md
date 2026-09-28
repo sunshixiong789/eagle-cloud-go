@@ -57,7 +57,12 @@ EAGLE_TEST_REDIS_ADDRESS=127.0.0.1:6379 EAGLE_TEST_RABBITMQ_URL=amqp://eagle:eag
 
 真实适配测试覆盖：无绑定时不得完成 Outbox；建立绑定后重试成功；发布断线后恢复；
 消费停机重入队；并发同键订单只生成一个订单/事件；不同请求冲突；旧订单摘要兼容；
-缓存旧令牌在失效后不能回填；Redis 不可用时数据库降级；Redis TLS CA/主机名验证。
+缓存旧令牌在失效后不能回填；Redis 不可用时数据库降级；Redis TLS CA/主机名验证；
+quorum 源队列在 DLQ 缺失绑定时保留消息，绑定恢复后继续投递。
+`app/order/tests/e2e` 还启动三个真实服务进程和各自独立的 PostgreSQL 数据库，验证 HTTP 下单、
+服务间凭据与 gRPC 调用、Outbox 缺失绑定重试、重启后的订单幂等和 Inbox 去重。
+测试让 S3 不可达以验证 admin 和授权链仍可启动；只有 Keycloak 签发端由测试 RS256/JWKS 服务替代，
+服务内部验签、audience 和授权中间件均照常运行。它不替代真实 Keycloak 配置和多节点 broker 故障演练。
 本地 TLS 测试使用证书校验代理连接真实 Redis，生产还需验证供应商端点及证书轮换。
 
 ## 生产环境验收记录

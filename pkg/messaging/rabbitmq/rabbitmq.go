@@ -365,13 +365,19 @@ func declareConsumerTopology(ch *amqp.Channel, exchange, queue, routingKey strin
 		return fmt.Errorf("declare dead-letter exchange: %w", err)
 	}
 	dlq := queue + ".dlq"
-	if _, err := ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
+	if _, err := ch.QueueDeclare(dlq, true, false, false, false, amqp.Table{"x-queue-type": "quorum"}); err != nil {
 		return fmt.Errorf("declare dead-letter queue: %w", err)
 	}
 	if err := ch.QueueBind(dlq, "", dlx, false, nil); err != nil {
 		return fmt.Errorf("bind dead-letter queue: %w", err)
 	}
-	args := amqp.Table{"x-dead-letter-exchange": dlx}
+	// Retain the source message until the DLQ confirms its own durable write.
+	args := amqp.Table{
+		"x-queue-type":           "quorum",
+		"x-dead-letter-exchange": dlx,
+		"x-dead-letter-strategy": "at-least-once",
+		"x-overflow":             "reject-publish",
+	}
 	if _, err := ch.QueueDeclare(queue, true, false, false, false, args); err != nil {
 		return fmt.Errorf("declare queue: %w", err)
 	}

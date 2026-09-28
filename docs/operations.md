@@ -59,15 +59,35 @@ EAGLE_DATABASE_DSN='postgres://...' ./bin/outboxctl -command retry -id EVENT_ID 
 
 ```bash
 EAGLE_MESSAGING_RABBITMQ_URL='amqps://...' ./bin/mqctl \
-  -command inspect -queue eagle.admin.order-created.v1.dlq
+  -command inspect -queue eagle.admin.order-created.v2.dlq
 EAGLE_MESSAGING_RABBITMQ_URL='amqps://...' ./bin/mqctl \
-  -command redrive -queue eagle.admin.order-created.v1.dlq \
+  -command redrive -queue eagle.admin.order-created.v2.dlq \
   -exchange eagle.events -routing-key order.created.v1 -limit 20 -yes
 ```
 
 消费中正常停机或取消上下文时关闭 channel，由 broker 重入队，不把停机当作毒消息送入 DLQ。
-Redrive 前确认消费者已向前兼容事件版本。RabbitMQ 生产集群应启用 quorum queue、跨可用区
-副本、磁盘/内存水位告警和 definitions 备份；这些属于 broker 平台配置，不由应用启动时创建。
+Redrive 前确认消费者已向前兼容事件版本。应用声明主队列和 DLQ 为 quorum queue，主队列使用
+`x-dead-letter-strategy=at-least-once` 和 `x-overflow=reject-publish`。DLQ 暂时不可路由时，
+消息保留在源队列，由 broker 后台重试；恢复后的投递可能延迟数分钟，也可能重复，消费者仍须幂等。
+生产需要另外配置至少三个 RabbitMQ 节点和跨可用区副本布局、磁盘/内存水位告警及 definitions 备份；
+单节点 quorum queue 不代表高可用。
+
+### 从旧 classic 队列迁移
+
+默认队列改为 `eagle.admin.order-created.v2`，事件 routing key 仍为 `order.created.v1`。
+RabbitMQ 不允许原地更改队列类型；不要将新版本的队列名覆盖为旧 classic 队列名。
+已有部署使用维护窗口迁移（首次部署无需执行）：
+
+1. 暂停所有订单事件发布进程，保留旧 admin 消费者，等待旧主队列 ready/unacked 均为 0。
+2. 检查旧 `eagle.admin.order-created.v1.dlq`，修复并 redrive 待处理事件，再确认两个旧队列均为空。
+   无法处理的消息应先导出保留，不能为迁移直接丢弃。
+3. 停止旧 admin，解除旧主队列在 `eagle.events` 的绑定，以及旧 DLQ 在 `eagle.events.dlx` 的绑定。
+   空旧队列可保留供核对；不要让旧版本重新启动并恢复绑定。
+4. 启动新 admin，确认新主队列及 DLQ 为 quorum、消费者已连接，再恢复订单发布并验证通知。
+
+`EAGLE_MESSAGING_EXCHANGE` 和 `EAGLE_MESSAGING_ORDER_CREATED_QUEUE` 可指定隔离环境的拓扑；
+共享同一事件流的服务必须使用同一 exchange。迁移失败时先暂停发布，核对新旧队列积压再决定回滚，
+不要直接切回旧消费者并遗留新队列消息。
 
 ## 可观测性与 SLO
 

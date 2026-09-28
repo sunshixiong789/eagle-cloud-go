@@ -162,3 +162,67 @@ func TestPublisherBoundsStalledHandshake(t *testing.T) {
 		t.Fatalf("handshake exceeded bounded timeout: %s", elapsed)
 	}
 }
+
+func TestQuorumDeadLetterSurvivesMissingBinding(t *testing.T) {
+	url, ch, exchange := brokerChannel(t)
+	queue := exchange + ".quorum"
+	if err := declareConsumerTopology(ch, exchange, queue, "created"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = ch.QueueDelete(queue, false, false, false)
+		_, _ = ch.QueueDelete(queue+".dlq", false, false, false)
+		_ = ch.ExchangeDelete(exchange+".dlx", false, false)
+	})
+	if err := ch.QueueUnbind(queue+".dlq", "", exchange+".dlx", nil); err != nil {
+		t.Fatal(err)
+	}
+	publisher, err := NewPublisher(Config{URL: url, Exchange: exchange})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer publisher.Close()
+	if err := publisher.Publish(context.Background(), Message{ID: "dead-letter-retained", RoutingKey: "created", Body: []byte("payload")}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		delivery, ok, err := ch.Get(queue, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok {
+			if err := delivery.Nack(false, false); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("message not available")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// Give the internal dead-letter publisher time to discover the missing route.
+	time.Sleep(500 * time.Millisecond)
+	if err := ch.QueueBind(queue+".dlq", "", exchange+".dlx", false, nil); err != nil {
+		t.Fatal(err)
+	}
+	// RabbitMQ retries periodically; current broker defaults can be three minutes.
+	deadline = time.Now().Add(4 * time.Minute)
+	for {
+		delivery, ok, err := ch.Get(queue+".dlq", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok {
+			if delivery.MessageId != "dead-letter-retained" {
+				t.Fatalf("unexpected message: %s", delivery.MessageId)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("dead-letter delivery did not recover after restoring binding")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

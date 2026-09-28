@@ -62,7 +62,7 @@ func buildApp(bc *config.Bootstrap, logger *slog.Logger) (platformruntime.Compon
 	file := fileservice.NewFileService(files)
 	notifications := notificationapp.NewUsecase(notificationinfra.NewRepository(db))
 	notification := notificationservice.NewNotificationService(notifications)
-	gs := newGRPCServer(bc.GetServer(), ms, permission, role, authorization, dict, file, notification)
+	gs := newGRPCServer(bc.GetServer(), ms, bc.GetFile(), permission, role, authorization, dict, file, notification)
 	hs := newHTTPServer(bc.GetServer(), ms, bc.GetFile(), permission, role, dict, file, notification)
 
 	// 所有可能失败的初始化完成后，再启动后台任务。

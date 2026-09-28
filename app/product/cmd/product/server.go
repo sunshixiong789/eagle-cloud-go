@@ -12,7 +12,7 @@ import (
 )
 
 func newGRPCServer(c *config.Server, ms []middleware.Middleware, svc *productservice.ProductService) *grpc.Server {
-	return server.NewGRPCServer(c, ms, func(s *grpc.Server) {
+	return server.NewGRPCServer(c, ms, nil, func(s *grpc.Server) {
 		productv1.RegisterProductServiceServer(s, svc)
 	})
 }

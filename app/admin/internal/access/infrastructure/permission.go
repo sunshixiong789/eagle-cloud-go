@@ -173,18 +173,26 @@ func (r *permissionRepo) Update(ctx context.Context, p *domain.Permission, expec
 		if err := requirePermissionDefinition(ctx, tx, p.Code()); err != nil {
 			return err
 		}
-		row, err := tx.Permission.UpdateOneID(p.ID()).
-			SetNillableParentID(permissionParentPtr(p.ParentID())).
+		update := tx.Permission.UpdateOneID(p.ID()).
 			SetName(p.Name()).
-			SetNillableCode(permissionCodePtr(p.Code())).
 			SetType(int32(p.Type())).
 			SetPath(p.Path()).
 			SetComponent(p.Component()).
 			SetIcon(p.Icon()).
 			SetSort(p.Sort()).
 			SetVisible(p.Visible()).
-			SetStatus(int32(p.Status())).
-			Save(ctx)
+			SetStatus(int32(p.Status()))
+		if p.IsRoot() {
+			update.ClearParentID()
+		} else {
+			update.SetParentID(p.ParentID())
+		}
+		if p.Code().IsZero() {
+			update.ClearCode()
+		} else {
+			update.SetCode(p.Code().String())
+		}
+		row, err := update.Save(ctx)
 		if err != nil {
 			if platformdb.IsNotFound(err) {
 				return domain.ErrPermissionNotFound

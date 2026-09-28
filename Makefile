@@ -181,4 +181,4 @@ build-independent:
 # 使用显式指定的隔离 Redis/RabbitMQ；禁止缺少服务时静默跳过验收
 test-adapters:
 	@test -n "$$EAGLE_TEST_REDIS_ADDRESS" -a -n "$$EAGLE_TEST_RABBITMQ_URL" || (echo "set EAGLE_TEST_REDIS_ADDRESS and EAGLE_TEST_RABBITMQ_URL"; exit 1)
-	go test -race -count=1 ./pkg/messaging/rabbitmq ./app/product/internal/product/infrastructure ./app/order/internal/order/infrastructure
+	go test -race -count=1 ./pkg/messaging/rabbitmq ./app/product/internal/product/infrastructure ./app/order/internal/order/infrastructure ./app/order/tests/e2e

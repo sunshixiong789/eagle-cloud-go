@@ -4,6 +4,7 @@ import (
 	"github.com/go-kratos/kratos/v3/middleware"
 	"github.com/go-kratos/kratos/v3/transport/grpc"
 	"github.com/go-kratos/kratos/v3/transport/http"
+	stdgrpc "google.golang.org/grpc"
 
 	accessv1 "github.com/eagle-go/eagle/api/eagle/access/v1"
 	dictionaryv1 "github.com/eagle-go/eagle/api/eagle/dictionary/v1"
@@ -20,6 +21,7 @@ import (
 func newGRPCServer(
 	c *config.Server,
 	ms []middleware.Middleware,
+	fileConf *config.File,
 	permission *accessservice.PermissionService,
 	role *accessservice.RoleBindingService,
 	authorization *accessservice.AuthorizationService,
@@ -27,7 +29,9 @@ func newGRPCServer(
 	file *fileservice.FileService,
 	notification *notificationservice.NotificationService,
 ) *grpc.Server {
-	return server.NewGRPCServer(c, ms, func(s *grpc.Server) {
+	// File metadata and protobuf framing need space beyond the raw file limit.
+	options := []grpc.ServerOption{grpc.Options(stdgrpc.MaxRecvMsgSize(int(fileConf.GetMaxSizeBytes()) + config.FileMessageOverhead))}
+	return server.NewGRPCServer(c, ms, options, func(s *grpc.Server) {
 		accessv1.RegisterPermissionServiceServer(s, permission)
 		accessv1.RegisterRoleBindingServiceServer(s, role)
 		accessv1.RegisterAuthorizationServiceServer(s, authorization)

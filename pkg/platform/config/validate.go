@@ -2,9 +2,13 @@ package config
 
 import (
 	"errors"
+	"math"
 	"net/url"
 	"strings"
 )
+
+// FileMessageOverhead bounds protobuf framing and metadata above the raw payload.
+const FileMessageOverhead = 64 << 10
 
 type Requirements struct {
 	Database              bool
@@ -83,8 +87,8 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 	if obs.GetMetricsAddr() != "" && obs.GetMetricsAddr() == server.GetHttp().GetAddr() {
 		errs = append(errs, errors.New("observability.metrics_addr must differ from server.http.addr"))
 	}
-	if required.File && file.GetMaxSizeBytes() <= 0 {
-		errs = append(errs, errors.New("file.max_size_bytes must be positive"))
+	if required.File && (file.GetMaxSizeBytes() <= 0 || file.GetMaxSizeBytes() > math.MaxInt32-FileMessageOverhead) {
+		errs = append(errs, errors.New("file.max_size_bytes must be positive and fit the gRPC message limit"))
 	}
 	if required.File {
 		switch file.GetProvider() {

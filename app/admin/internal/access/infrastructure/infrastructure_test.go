@@ -718,3 +718,29 @@ func TestNewEnforcerLoadsFromDatabase(t *testing.T) {
 		t.Fatalf("持久化判定器直接改内存策略: %v", err)
 	}
 }
+
+func TestPermissionUpdateClearsNullableFields(t *testing.T) {
+	skipIfShort(t)
+	ctx := context.Background()
+	r := NewPermissionRepo(testDB)
+	mustCatalogCode(t, "test:review:read")
+	parent, err := r.Create(ctx, newPermission(t, domain.NewPermissionParams{Name: "review root", Type: 1, Status: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.Create(ctx, newPermission(t, domain.NewPermissionParams{Name: "review child", ParentID: parent.ID(), Code: "test:review:read", Type: 2, Status: 1}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Delete(ctx, p.ID(), nil); _ = r.Delete(ctx, parent.ID(), nil) }()
+	if err := p.Update(domain.NewPermissionParams{Name: "review child", ParentID: 0, Code: "", Type: 2, Status: 1}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := r.Update(ctx, p, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ParentID() != 0 || got.Code().String() != "" {
+		t.Fatalf("expected root and empty code, got parent=%d code=%q", got.ParentID(), got.Code().String())
+	}
+}
