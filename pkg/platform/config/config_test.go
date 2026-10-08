@@ -53,6 +53,11 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	t.Setenv("EAGLE_AUTH_INTERNAL_CLIENT_ID", "eagle-product-worker")
 	t.Setenv("EAGLE_MESSAGING_RABBITMQ_URL", "amqps://rabbit.internal/eagle")
 	t.Setenv("EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO", "0.05")
+	t.Setenv("EAGLE_FILE_OSS_REGION", "cn-shanghai")
+	t.Setenv("EAGLE_FILE_OSS_BUCKET", "runtime-bucket")
+	t.Setenv("EAGLE_FILE_OSS_ACCESS_KEY_ID", "runtime-id")
+	t.Setenv("EAGLE_FILE_OSS_ACCESS_KEY_SECRET", "runtime-secret")
+	t.Setenv("EAGLE_FILE_OSS_SECURITY_TOKEN", "runtime-token")
 
 	c := kratosconfig.New(
 		kratosconfig.WithSource(file.NewSource(path), configenv.NewSource("EAGLE")),
@@ -81,6 +86,22 @@ func TestEnvironmentOverridesSensitiveDefaults(t *testing.T) {
 	if got := bc.GetObservability().GetTraceSampleRatio(); got != 0.05 {
 		t.Fatalf("OBSERVABILITY_TRACE_SAMPLE_RATIO override not applied: %v", got)
 	}
+	oss := bc.GetFile().GetOss()
+	if oss.GetRegion() != "cn-shanghai" || oss.GetBucket() != "runtime-bucket" ||
+		oss.GetAccessKeyId() != "runtime-id" || oss.GetAccessKeySecret() != "runtime-secret" || oss.GetSecurityToken() != "runtime-token" {
+		t.Fatal("OSS environment overrides not applied")
+	}
+}
+
+func TestOSSRequiresConfigurationAndLocalIsExplicit(t *testing.T) {
+	bc := loadConfig(t, "admin")
+	if err := appconfig.Validate(bc, appconfig.Requirements{File: true}); err == nil || !strings.Contains(err.Error(), "file.oss") {
+		t.Fatalf("unconfigured OSS should fail at startup: %v", err)
+	}
+	bc.File.Provider = "local"
+	if err := appconfig.Validate(bc, appconfig.Requirements{File: true}); err != nil {
+		t.Fatalf("explicit local mode should not need cloud credentials: %v", err)
+	}
 }
 
 func TestConfigParses(t *testing.T) {
@@ -99,6 +120,12 @@ func TestConfigParses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.service, func(t *testing.T) {
 			bc := loadConfig(t, tt.service)
+			if tt.service == "admin" {
+				if bc.GetFile().GetProvider() != "oss" {
+					t.Fatal("admin should default to OSS")
+				}
+				bc.File.Oss = &appconfig.File_OSS{Region: "cn-hangzhou", Bucket: "test-bucket", AccessKeyId: "test-id", AccessKeySecret: "test-secret"}
+			}
 			if err := appconfig.Validate(bc, tt.requirements); err != nil {
 				t.Fatalf("配置校验失败: %v", err)
 			}

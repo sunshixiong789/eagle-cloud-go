@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/casbin/casbin/v2/model"
+	"github.com/casbin/casbin/v3/model"
 )
 
 func TestStorageAdapterRejectsCasbinWrites(t *testing.T) {

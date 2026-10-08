@@ -13,6 +13,8 @@ BUF_AGAINST ?= .git\#branch=master,subdir=api
 # 每个服务拥有独立 database；可用 EAGLE_DSN 覆盖。
 EAGLE_DSN ?= postgres://eagle:eagle@127.0.0.1:5432/eagle_$(SERVICE)?sslmode=disable
 MIGRATION_DIR := app/$(SERVICE)/migrations
+COMPOSE_PROD_ENV ?= .env.production
+COMPOSE_PROD := docker compose --env-file $(COMPOSE_PROD_ENV) -f deploy/compose/compose.yml
 
 .PHONY: init
 # 下载并验证项目锁定的开发期工具链
@@ -126,12 +128,13 @@ up:
 .PHONY: up-deps
 # 只启动本地基础依赖，服务由 make run 单独启动
 up-deps:
-	docker compose -f deploy/docker-compose.yml up -d postgres keycloak redis rabbitmq minio minio-init
+	docker compose -f deploy/docker-compose.yml up -d postgres keycloak redis rabbitmq
 
-.PHONY: validate-deploy
+.PHONY: validate-deploy test-gateway
 # 校验 Compose 与所有可部署 Kubernetes 组合能被正确解析
 validate-deploy:
 	docker compose -f deploy/docker-compose.yml config --quiet
+	docker compose --env-file deploy/compose/.env.example -f deploy/compose/compose.yml --profile migration config --quiet
 	@for manifest in \
 		deploy/kubernetes/base \
 		deploy/kubernetes/migrations \
@@ -144,6 +147,34 @@ validate-deploy:
 		deploy/kubernetes/backup; do \
 		kubectl kustomize $$manifest >/dev/null || exit 1; \
 	done
+
+# 使用隔离 Docker 网络和临时 TLS 证书验收两种 nginx 配置与 DNS 更新
+test-gateway:
+	bash deploy/gateway/test.sh
+
+.PHONY: compose-prod-check compose-prod-up compose-prod-deploy compose-prod-status
+# 检查真实生产环境配置，不输出其中的凭据，也不连接外部依赖
+compose-prod-check:
+	$(COMPOSE_PROD) --profile migration config --quiet
+
+# 首次部署：先拉取镜像，再串行迁移，最后启动并等待健康；不在服务启动时自动迁移
+compose-prod-up: compose-prod-check
+	$(COMPOSE_PROD) pull admin product order gateway
+	@for service in $(SERVICES); do \
+		$(COMPOSE_PROD) run --rm --no-deps $$service-migrate || exit 1; \
+	done
+	$(COMPOSE_PROD) up -d --no-build --wait --wait-timeout 180 admin product order gateway
+
+# 只发布一个变化的服务，迁移与应用使用同一个镜像；例如 SERVICE=product
+compose-prod-deploy: compose-prod-check
+	@case " $(SERVICES) " in *" $(SERVICE) "*) ;; *) echo "unknown SERVICE=$(SERVICE), choose: $(SERVICES)"; exit 2;; esac
+	$(COMPOSE_PROD) pull $(SERVICE)
+	$(COMPOSE_PROD) run --rm --no-deps $(SERVICE)-migrate
+	$(COMPOSE_PROD) up -d --no-deps --no-build --wait --wait-timeout 180 $(SERVICE)
+
+# 查看 Compose 生产服务与健康状态
+compose-prod-status:
+	$(COMPOSE_PROD) ps --all
 
 .PHONY: render-prod-k3s
 # 渲染三节点 K3s 生产应用清单，不连接集群、不执行发布

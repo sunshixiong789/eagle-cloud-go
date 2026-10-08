@@ -7,7 +7,8 @@
 不能把接口 RBAC 或 Keycloak realm 自动等同于租户隔离。
 
 admin 保持支撑模块组合，product/order 演示独立业务服务。出现独立团队、容量或故障隔离需求时再拆服务。
-部署可接入企业现有 Kubernetes 平台；K3s 是仓库提供的部署方案，不要求企业另建第二套平台。
+部署按需使用 Compose + nginx 或 K3s + Envoy Gateway，少量固定服务默认选择 Compose。
+也可接入企业现有 Kubernetes 平台，不要求企业另建第二套平台；两种模式都不需要额外注册中心。
 
 ## 新服务的最小接入路径
 
@@ -39,7 +40,8 @@ api/pkg 仍使用单仓库本地 replace，意味着源码升级需要评估所�
 ## 交付门禁和责任
 
 CI 提供生成差异、API 兼容性、lint、race、架构、PostgreSQL 迁移、真实 Redis/RabbitMQ 测试，
-以及独立模块与镜像构建。Release 工作流生成 SBOM/provenance，按架构扫描候选镜像后发布 digest。
+以及独立模块与镜像构建、两种部署清单解析和 nginx HTTPS/DNS 恢复验收。
+Release 工作流生成 SBOM/provenance，按架构扫描候选镜像后发布 digest。
 需由仓库管理员启用必需状态检查与 release environment，环境仓库负责部署授权、镜像签名校验和环境 Secret。
 这些平台配置必须以实际设置验收，不能把 workflow 文件等同于已启用的保护规则。
 
@@ -61,7 +63,7 @@ EAGLE_TEST_REDIS_ADDRESS=127.0.0.1:6379 EAGLE_TEST_RABBITMQ_URL=amqp://eagle:eag
 quorum 源队列在 DLQ 缺失绑定时保留消息，绑定恢复后继续投递。
 `app/order/tests/e2e` 还启动三个真实服务进程和各自独立的 PostgreSQL 数据库，验证 HTTP 下单、
 服务间凭据与 gRPC 调用、Outbox 缺失绑定重试、重启后的订单幂等和 Inbox 去重。
-测试让 S3 不可达以验证 admin 和授权链仍可启动；只有 Keycloak 签发端由测试 RS256/JWKS 服务替代，
+测试让 OSS 不可达以验证 admin 和授权链仍可启动；只有 Keycloak 签发端由测试 RS256/JWKS 服务替代，
 服务内部验签、audience 和授权中间件均照常运行。它不替代真实 Keycloak 配置和多节点 broker 故障演练。
 本地 TLS 测试使用证书校验代理连接真实 Redis，生产还需验证供应商端点及证书轮换。
 

@@ -1,6 +1,6 @@
 # 生产运行手册
 
-本文只说明生产控制面和故障处置；本地启动见[开发环境部署](development-deployment.md)，
+本文说明 Compose/K3s 生产运行和故障处置；本地启动见[开发环境部署](development-deployment.md)，
 服务边界见[架构说明](architecture.md)，生产发布顺序见[生产环境部署](deployment.md)。
 
 ## 发布与回滚
@@ -11,16 +11,23 @@
 候选镜像先上传 GHCR 的 `candidate-*` 标签，两个架构的 HIGH/CRITICAL 漏洞扫描均通过后，
 才发布版本标签并输出不可变 digest；候选标签不得部署，失败候选由 registry 生命周期策略清理。
 手动触发使用 `sha-<commit>` 版本。需在仓库配置 packages 写权限、分支保护和 `release` environment；
-生产 overlay 仍由环境仓库更新，这些工作流不直接部署生产，也不代表已安装镜像签名准入策略。
+Compose 环境文件或 K3s overlay 由受控发布过程更新；这些工作流不直接部署生产，
+也不代表已安装镜像签名准入策略。
 
-镜像发布与环境部署刻意分离。生产由 GitOps 仓库把 overlay 中的镜像改为 digest，
-按“expand migration Job → Deployment 滚动 → 指标观察 → contract migration”推进。
+Compose 使用 `make compose-prod-deploy SERVICE=product`，K3s 由环境仓库更新 overlay。
+两种模式都将镜像固定为 digest，按“expand 迁移 → 应用更新 → 指标观察 → contract 迁移”推进。
 回滚应用只回退 digest；已经执行的数据库变更必须保持向后兼容，不能随 Pod 自动回滚。
 
-上线后至少观察 30 分钟：可用性错误预算、p99、Pod 重启、Outbox 年龄、DLQ、消费失败。
+上线后至少观察 30 分钟：可用性错误预算、p99、容器/Pod 重启、Outbox 年龄、DLQ、消费失败。
 快速错误预算告警触发时停止发布；不要在错误预算耗尽时继续常规变更。
 
 ## 生产网关与服务通信
+
+Compose 使用 nginx HTTPS 入口和 Docker DNS；配置、证书续期、双机撤流发布和应用回滚见
+[Compose 部署说明](compose-deployment.md)。只发布 80/443，不暴露应用 gRPC/metrics。
+入口不自动重试写请求，应用 readiness、健康告警和实际授权用例必须分别验证。
+
+K3s 模式使用以下 Envoy Gateway 与集群内通信配置：
 
 应用基线定义路由；`deploy/kubernetes/gateway` 为 Envoy Gateway 增加 TLS 1.2+、请求/
 连接超时、连接上限、本地限流、least-request 负载均衡与后端熔断。域名、CORS origin、
@@ -35,7 +42,7 @@ kubectl apply -k deploy/kubernetes/overlays/production-mtls
 
 该 overlay 依赖 Istio，gRPC 9000 使用 STRICT mTLS，并用 ServiceAccount 限制 product→admin、
 order→product。HTTP 8000 和 metrics 9100 仍由 Gateway/Prometheus 访问，因此保留 PERMISSIVE；
-NetworkPolicy 同时做 L3/L4 限制。数据库、RabbitMQ、Redis、OIDC 和 S3 的生产连接也必须使用
+NetworkPolicy 同时做 L3/L4 限制。数据库、RabbitMQ、Redis、OIDC 和 OSS 的生产连接也必须使用
 各自 TLS 地址与受信 CA，服务网格不会替代外部依赖的 TLS。
 
 ## MQ 一致性和运维闭环
@@ -113,7 +120,7 @@ Outbox 停放/延迟、DLQ、消费失败、队列积压、Redis 和备份失败
 
 优先使用托管 PostgreSQL 的 PITR、跨可用区高可用和跨区域副本。仓库中的 CronJob 是便携
 兜底：三个数据库错峰执行 `pg_dump -Fc`，用 `pg_restore --list` 校验后，以服务端加密上传
-到 S3 兼容存储。
+到独立配置的 S3 兼容存储。备份的 `S3_*`/AWS 凭据与应用文件模块的 `EAGLE_FILE_OSS_*` 配置独立；使用 OSS 备份时需单独验证其 S3 兼容接口。
 
 ```bash
 kubectl apply -k deploy/kubernetes/backup

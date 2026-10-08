@@ -1,9 +1,19 @@
 # 生产环境部署
 
-本文以三节点 K3s HA 作为默认生产模式，描述生产制品、平台前置条件和安全发布顺序。本地
-Compose、宿主机调试和 IDEA 入口见
+生产按规模选择 Docker Compose + nginx 或 K3s + Envoy Gateway。小团队、少量服务默认选
+Compose；需要跨节点调度、自动扩缩容或已有 Kubernetes 平台时选 K3s。两种模式共用服务镜像、
+业务边界和数据库迁移，不需要额外注册中心。本地 Compose、宿主机调试和 IDEA 入口见
 [开发环境部署](development-deployment.md)，告警、MQ、备份恢复和故障处置见
 [生产运行手册](operations.md)。
+
+| 场景 | 部署模式 | 入口与服务发现 |
+|---|---|---|
+| 单机、固定的少量服务 | [Compose 生产部署](compose-deployment.md) | nginx + Docker DNS |
+| 双机、应用冗余 | [两台独立 Compose + 云 LB](compose-deployment.md#两台服务器) | 每台 nginx + 本机 Docker DNS |
+| 多节点调度、扩缩容或平台统一管理 | [K3s 集群部署](../deploy/kubernetes/k3s/README.md) | Envoy Gateway + Service/CoreDNS |
+
+单机 Compose/K3s 都不能容忍整机故障；双机 Compose 不自动调度容器。K3s 高可用示例使用
+三个 server + embedded etcd，两台 embedded etcd 不能容忍丢失一个成员。
 
 ## 发布单元
 
@@ -16,7 +26,7 @@ Compose、宿主机调试和 IDEA 入口见
 | order | order | `eagle/order:<version>` | `eagle_order` |
 
 每个镜像只包含当前服务的 `/app/service`、通用 `/app/migrate`、`/app/healthcheck`、配置和
-`app/<service>/migrations`。三个服务分别拥有 Deployment、Service、数据库账号和发布节奏；
+`app/<service>/migrations`。三个服务分别拥有容器或 Deployment/Service、数据库账号和发布节奏；
 禁止跨服务共享数据库、迁移目录或事务。
 
 ## 构建不可变镜像
@@ -44,9 +54,16 @@ git push origin v1.2.0
 make image SERVICE=product VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-## 平台前置条件
+## Compose 生产入口
 
-默认拓扑是三台 K3s server 同时承担 control-plane、embedded etcd 和 worker。三个节点必须使用
+使用独立的 `deploy/compose/compose.yml` 和 `deploy/compose/.env.example`。填写生产配置、
+证书和不可变镜像后，`make compose-prod-up` 先迁移再启动并等待健康；后续使用
+`make compose-prod-deploy SERVICE=product` 只更新变化的服务。生产清单不发布应用调试端口，
+不包含开发凭据或本地中间件。完整配置、双机发布和恢复边界见[Compose 部署说明](compose-deployment.md)。
+
+## K3s 平台前置条件
+
+K3s 高可用示例是三台 server 同时承担 control-plane、embedded etcd 和 worker。三个节点必须使用
 SSD 和稳定私网，任意两台的剩余容量能够承载核心工作负载；该拓扑容忍一个节点故障，但不容忍
 同时失去两个节点。建群和入口配置见
 [三节点 K3s 生产集群](../deploy/kubernetes/k3s/README.md)。
@@ -61,24 +78,24 @@ SSD 和稳定私网，任意两台的剩余容量能够承载核心工作负载�
 | 边缘网关 | 固定版本 Envoy Gateway 控制器、Gateway API 与 Envoy Gateway CRD |
 | 身份 | 生产 Keycloak/OIDC、独立服务身份和 Client Credentials |
 | 数据 | 三个独立 PostgreSQL database 与最小权限账号 |
-| 中间件 | 高可用 Redis、RabbitMQ、S3 兼容对象存储 |
+| 中间件 | 高可用 Redis、RabbitMQ、阿里云 OSS |
 | 可观测性 | OTel Collector、Prometheus Operator、日志和 trace 后端 |
 | Secret | External Secrets、Vault 或云 Secret Manager |
 
 仓库不会在生产应用命名空间部署单副本 PostgreSQL、Redis、RabbitMQ、Keycloak 或对象存储。
 
-## 环境 Overlay
+## K3s 环境 Overlay
 
 `deploy/kubernetes/base` 定义三个服务的 Deployment/Service、Gateway API、HPA、PDB、探针、
 安全上下文和 NetworkPolicy。迁移 Job 模板按服务拆分在 `deploy/kubernetes/migrations/`，
 不属于应用 base，避免与 Deployment 同时 apply。`production-k3s` 组合通用 `production` 基线，
-并增加三副本 Envoy 数据面和 `GatewayClass`，是默认生产入口。实际环境必须在独立 GitOps 配置
+并增加三副本 Envoy 数据面和 `GatewayClass`，是 K3s 模式的生产入口。实际环境必须在独立 GitOps 配置
 中替换以下内容：
 
 - 三个镜像的仓库和 digest；
 - API 域名、TLS Secret、GatewayClass 和 CORS origin；
 - OIDC issuer、JWKS、服务间 token 地址；
-- 三个数据库 DSN、Redis、RabbitMQ 和 S3 地址及凭据；
+- 三个数据库 DSN、Redis、RabbitMQ 地址及凭据、OSS 地域/Bucket 和凭据；
 - 资源、HPA、限流、熔断和超时参数；
 - OTLP、Prometheus、日志与告警接收方。
 
@@ -89,9 +106,9 @@ make validate-deploy
 ```
 
 该命令只证明 Compose 和 Kustomize 可以解析，不证明生产依赖存在，也不执行迁移或发布。
-只查看默认生产结果可执行 `make render-prod-k3s`。
+只查看 K3s 生产结果可执行 `make render-prod-k3s`；Compose 的真实配置用 `make compose-prod-check` 检查。
 
-## 迁移与滚动发布
+## K3s 迁移与滚动发布
 
 Deployment 启动时不会自动迁移，避免多副本并发修改 schema。每次发布必须由部署平台按服务
 串行编排，不能依赖一次 `kubectl apply -k` 自动保证 Job 与 Deployment 的先后顺序。
@@ -137,7 +154,8 @@ create 语义创建。迁移 Job 必须满足：
 
 ## 网关与服务通信
 
-生产只使用 Gateway API + Envoy Gateway，不部署 Compose 的 nginx。K3s 初始化时禁用默认
+Compose 模式使用 nginx + Docker DNS，详见[Compose 部署说明](compose-deployment.md)。
+K3s 模式使用 Gateway API + Envoy Gateway。K3s 初始化时禁用默认
 Traefik，保留 ServiceLB；ServiceLB 在三个节点承接 80/443，外部 LB 负责节点健康检查。
 Envoy Gateway 控制器通过固定版本 Helm chart 安装，`production-k3s` 创建
 `GatewayClass/envoy`、`Gateway`、`HTTPRoute` 和三副本 Envoy 数据面。
@@ -151,9 +169,9 @@ Envoy Gateway 控制器通过固定版本 Helm chart 安装，`production-k3s` �
 | `/v1/orders` | order:8000 |
 
 内部 gRPC 使用 Headless Service + `dns:///`：product 调 admin，order 调 product。服务间调用
-使用独立 Client Credentials，不能复用 Compose 的 `eagle-worker` 开发凭据。
+使用独立 Client Credentials，不能复用开发 Compose 的 `eagle-worker` 凭据。
 
-## Secret 与配置
+## K3s Secret 与配置
 
 `deploy/kubernetes/secret.example.yaml` 只列出键名，所有值都是 `CHANGE_ME`，不得直接 apply。
 生产由 Secret Manager 生成同名 `eagle-runtime` Secret。普通配置通过 ConfigMap 注入，敏感值
@@ -164,10 +182,10 @@ Envoy Gateway 控制器通过固定版本 Helm chart 安装，`production-k3s` �
 - token 的 `iss` 与 `EAGLE_AUTH_ISSUER` 完全一致；
 - product/order 使用不同的 Client Credentials；
 - 每个 DSN 只能访问自己的 database；
-- RabbitMQ、Redis、OIDC、S3、OTLP 使用生产 TLS 地址和受信 CA；
+- RabbitMQ、Redis、OIDC、OSS、OTLP 使用生产 TLS 地址和受信 CA；
 - TLS Secret、数据库口令、服务 secret 支持独立轮换。
 
-## 就绪、扩缩容与网络
+## K3s 就绪、扩缩容与网络
 
 `/livez` 只表示进程存活，`/readyz` 聚合初始化状态和数据库等依赖检查。Gateway 和 Service 只应
 把流量发送给 readiness 通过的 Pod。滚动策略保持 `maxUnavailable: 0`，发布平台仍需等待
@@ -180,7 +198,7 @@ HPA、PDB、topology spread、ResourceQuota、LimitRange、网关限流和熔断
 容量结论，必须由压测和真实流量校准。NetworkPolicy 只允许网关访问 HTTP、指定服务访问内部
 gRPC、Prometheus 访问 metrics；环境仓库还应按实际外部依赖补 egress 白名单。
 
-## 上线检查
+## K3s 上线检查
 
 - 镜像使用 digest，签名/provenance 校验通过；
 - 三个 K3s 节点、embedded etcd 和控制面固定入口健康，异地 snapshot 可恢复；

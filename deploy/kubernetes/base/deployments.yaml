@@ -31,8 +31,9 @@ spec:
             - {name: EAGLE_AUTH_AUDIENCE, value: eagle-admin}
             - {name: EAGLE_AUTH_INTERNAL_CLIENT_ID, value: eagle-product-worker}
             - {name: EAGLE_MESSAGING_RABBITMQ_URL, valueFrom: {secretKeyRef: {name: eagle-runtime, key: rabbitmq-url}}}
-            - {name: EAGLE_FILE_S3_ACCESS_KEY, valueFrom: {secretKeyRef: {name: eagle-runtime, key: s3-access-key}}}
-            - {name: EAGLE_FILE_S3_SECRET_KEY, valueFrom: {secretKeyRef: {name: eagle-runtime, key: s3-secret-key}}}
+            - {name: EAGLE_FILE_OSS_ACCESS_KEY_ID, valueFrom: {secretKeyRef: {name: eagle-runtime, key: oss-access-key-id}}}
+            - {name: EAGLE_FILE_OSS_ACCESS_KEY_SECRET, valueFrom: {secretKeyRef: {name: eagle-runtime, key: oss-access-key-secret}}}
+            - {name: EAGLE_FILE_OSS_SECURITY_TOKEN, valueFrom: {secretKeyRef: {name: eagle-runtime, key: oss-security-token, optional: true}}}
           ports: [{name: http, containerPort: 8000}, {name: grpc, containerPort: 9000}, {name: metrics, containerPort: 9100}]
           startupProbe: {httpGet: {path: /readyz, port: metrics}, failureThreshold: 30, periodSeconds: 5}
           readinessProbe: {httpGet: {path: /readyz, port: metrics}, periodSeconds: 5, timeoutSeconds: 2}

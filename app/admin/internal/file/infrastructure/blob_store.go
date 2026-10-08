@@ -9,6 +9,8 @@ import (
 
 func NewBlobStore(c *config.File) (domain.BlobStore, error) {
 	switch c.GetProvider() {
+	case "oss":
+		return NewOSSBlobStore(c.GetOss()), nil
 	case "local":
 		return NewLocalBlobStore(c.GetLocalDir())
 	case "s3":

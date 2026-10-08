@@ -2,7 +2,7 @@
 
 基于 Go Workspace 的 Kratos 微服务开发底座，提供 OIDC 认证、集中 RBAC、服务间认证、缓存、可靠事件、对象存储与完整可观测性，并用商品、订单演示服务独立数据库、同步调用和异步事件。
 
-技术栈：Go 1.27、Kratos v3、Protobuf、buf、Ent、PostgreSQL 17、Keycloak、Casbin、Redis、RabbitMQ、S3、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
+技术栈：Go 1.27.1、Kratos v3、Protobuf、buf、Ent、PostgreSQL 18、Keycloak、Casbin v3、Redis、RabbitMQ、阿里云 OSS、OpenTelemetry、Prometheus、Loki、Tempo、Grafana、Kubernetes Gateway API。
 
 ## 项目现状
 
@@ -10,7 +10,7 @@
 
 | 服务 | 业务能力 | 数据库 | 依赖 |
 |---|---|---|---|
-| `admin` | 权限、字典、文件、站内通知 | `eagle_admin` | Keycloak、S3、RabbitMQ |
+| `admin` | 权限、字典、文件、站内通知 | `eagle_admin` | Keycloak、OSS、RabbitMQ |
 | `product` | 商品 | `eagle_product` | admin 策略快照、Redis |
 | `order` | 订单和商品快照 | `eagle_order` | product 商品查询、RabbitMQ |
 
@@ -21,7 +21,7 @@ flowchart TB
     client["Web / App / API Client"]
 
     subgraph edge [统一入口]
-        gateway["开发：nginx<br/>生产：Envoy Gateway"]
+        gateway["Compose：nginx<br/>K3s：Envoy Gateway"]
     end
 
     subgraph services [独立发布的应用服务]
@@ -43,7 +43,7 @@ flowchart TB
         keycloak["Keycloak<br/>OIDC · JWT · 服务身份"]
         redis[(Redis)]
         rabbitmq["RabbitMQ"]
-        object_store[(S3 / MinIO)]
+        object_store[(阿里云 OSS)]
     end
 
     client -->|HTTP| gateway
@@ -67,7 +67,7 @@ flowchart TB
 ```
 
 更完整的服务边界、分层和数据所有权见[架构说明](docs/architecture.md)。启动和调试见
-[开发环境部署](docs/development-deployment.md)，镜像与三节点 K3s 生产发布见
+[开发环境部署](docs/development-deployment.md)，Compose 与 K3s 生产发布见
 [生产环境部署](docs/deployment.md)。
 
 ## 目录结构
@@ -116,7 +116,7 @@ service -> application -> domain <- infrastructure
 
 ### 1. 环境要求
 
-- Go 1.27；较新的 Go 可按 `go.mod` 自动下载匹配工具链
+- Go 1.27.1；较新的 Go 可按 `go.mod` 自动下载匹配工具链
 - Docker Desktop 或兼容 Docker Compose 的运行环境
 - Git、Make 和 Bash；Windows 建议使用 WSL 或 Git Bash
 
@@ -136,6 +136,10 @@ make generate
 
 ### 3. 启动完整本地环境
 
+默认文件存储为阿里云 OSS。先将根目录 `.env.example` 复制为 `.env`，填写 Bucket 地域、名称和 RAM 凭据；Compose 会自动加载，真实凭据不会入库。尚未创建 OSS 时，可先在 `.env` 中设置 `EAGLE_FILE_PROVIDER=local`，文件会保存在 `uploads` 卷。详见[对象存储配置](docs/development-deployment.md#对象存储配置)。
+
+已有 PostgreSQL 17 数据卷时，先按[数据库升级步骤](docs/development-deployment.md#已有-postgresql-17-数据的升级)导出数据；当前 Compose 使用新的 `pgdata18` 卷，不会自动迁移旧数据。
+
 ```bash
 make up
 ```
@@ -153,7 +157,6 @@ Compose 会构建三个独立服务镜像，依次完成各自数据库迁移，
 | Keycloak | `http://127.0.0.1:8080` |
 | Keycloak 管理员 | 本地开发账号 `admin/admin` |
 | RabbitMQ 管理台 | `http://127.0.0.1:15672`，本地账号 `eagle/eagle` |
-| MinIO Console | `http://127.0.0.1:9005`，本地账号 `eagle/eagle-local-secret` |
 | admin metrics/health | `http://127.0.0.1:9101` |
 | product metrics/health | `http://127.0.0.1:9102` |
 | order metrics/health | `http://127.0.0.1:9103` |
@@ -191,7 +194,7 @@ make migrate-up SERVICE=admin
 ```
 
 ```bash
-make run SERVICE=admin
+EAGLE_FILE_PROVIDER=local make run SERVICE=admin
 ```
 
 `product` 依赖 admin，`order` 依赖 product。调试这两个服务时，需要同时保证它们的上游已启动。
@@ -450,12 +453,15 @@ product 每 5 秒刷新策略，默认允许使用最近 15 秒内成功确认�
 | `EAGLE_UPSTREAM_AUTHORIZATION_MAX_STALENESS` | 授权快照最大陈旧时间，默认 `15s` |
 | `EAGLE_MESSAGING_RABBITMQ_URL` | 订单事件发布与通知消费 |
 | `EAGLE_MESSAGING_EXCHANGE` / `ORDER_CREATED_QUEUE` | 事件 exchange / 通知 quorum 队列名，默认 `eagle.events` / `eagle.admin.order-created.v2` |
-| `EAGLE_FILE_PROVIDER` | `local` 或 `s3` |
-| `EAGLE_FILE_S3_ENDPOINT` / `BUCKET` / `ACCESS_KEY` / `SECRET_KEY` | S3/OSS/MinIO 连接配置 |
+| `EAGLE_FILE_PROVIDER` | 默认 `oss`；可显式选 `local` 或 `s3` |
+| `EAGLE_FILE_OSS_REGION` / `BUCKET` | OSS Bucket 所在地域和名称，必填 |
+| `EAGLE_FILE_OSS_ACCESS_KEY_ID` / `ACCESS_KEY_SECRET` | RAM 或 STS 凭据，必填 |
+| `EAGLE_FILE_OSS_ENDPOINT` / `SECURITY_TOKEN` | 可选地址覆盖 / STS token |
+| `EAGLE_FILE_S3_ENDPOINT` / `BUCKET` / `ACCESS_KEY` / `SECRET_KEY` | 可选 S3 兼容存储连接配置 |
 
 文件上传的 gRPC 接收上限随 `file.max_size_bytes` 配置，并预留 64 KiB 协议开销；业务层仍按原始
 文件大小校验。下载大于 4 MiB 的文件时，Go gRPC 客户端需设置 `grpc.MaxCallRecvMsgSize`，
-至少为文件上限加 64 KiB。S3 在实际操作时连接，单次操作最多 5 秒且遵从更短的请求 deadline；
+至少为文件上限加 64 KiB。OSS/S3 在实际操作时连接，单次操作最多 5 秒且遵从更短的请求 deadline；
 存储故障不阻断 admin 启动，上传结果不确定时保留 pending 记录，由清理任务重试删除。
 升级已有 RabbitMQ classic 队列前，先执行 [队列迁移步骤](docs/operations.md#从旧-classic-队列迁移)。
 
@@ -483,7 +489,22 @@ make images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 make push-images VERSION=v1.2.0 REGISTRY=registry.example.com/eagle
 ```
 
-生产默认使用三节点 K3s HA。每个服务使用独立 Deployment、Service、迁移 Job 和数据库账号；仓库提供 Envoy Gateway、TLS 跳转、HPA、PDB、NetworkPolicy、探针和安全上下文基线。迁移成功后再滚动服务，应用容器启动时不自动迁移。详细建群、发布、网络和存储边界见 [部署说明](docs/deployment.md)与 [K3s 集群说明](deploy/kubernetes/k3s/README.md)。
+生产按需选择部署方式，服务镜像、数据所有权和 API 契约不随平台变化：
+
+| 场景 | 方式 | 网关与服务发现 |
+|---|---|---|
+| 单机、小团队、少量服务 | [Docker Compose 生产部署](docs/compose-deployment.md) | nginx + Docker DNS |
+| 双机、应用冗余 | 每台独立 Compose，前置云 LB | 每台 nginx + 本机 Docker DNS |
+| 集群调度、自动扩缩容或已有平台 | [K3s 高可用部署](deploy/kubernetes/k3s/README.md) | Envoy Gateway + Kubernetes Service/CoreDNS |
+
+Compose 是简单部署的默认选择。生产使用独立清单 `deploy/compose/compose.yml`，填好
+`deploy/compose/.env.example` 中的生产配置与证书后执行 `make compose-prod-up`；后续执行
+`make compose-prod-deploy SERVICE=product` 只更新变化的服务。开发清单保留在
+`deploy/docker-compose.yml`，不与生产清单叠加。
+
+K3s 方案提供三节点控制面、Envoy Gateway、TLS 跳转、HPA、PDB、NetworkPolicy、探针和安全上下文。
+两种方式都先迁移再发布应用，不在进程启动时自动迁移，也不额外安装注册中心。选择和上线边界见
+[部署总览](docs/deployment.md)。
 
 ## 可观测性
 
@@ -527,7 +548,8 @@ race detector 需要 C 编译器。可在 WSL/Linux 中运行，或安装可用�
 
 - [架构说明](docs/architecture.md)：服务边界、分层、数据所有权和跨服务调用
 - [开发环境部署](docs/development-deployment.md)：Compose、宿主机调试、IDEA 入口和本地联调
-- [生产环境部署](docs/deployment.md)：不可变镜像、三节点 K3s、迁移顺序、网关和上线检查
+- [生产环境部署](docs/deployment.md)：Compose/K3s 选择、不可变镜像、迁移顺序和上线检查
+- [Compose 生产部署](docs/compose-deployment.md)：nginx、DNS、单机/双机发布与恢复边界
 - [生产运行手册](docs/operations.md)：告警、MQ、备份恢复、回滚和故障处置
 - [K3s 生产模式](deploy/kubernetes/k3s/README.md)：三节点集群、Envoy Gateway、入口和上线验证
 - [Kubernetes 基线](deploy/kubernetes/README.md)：Gateway API、Secret、发布与可观测性清单

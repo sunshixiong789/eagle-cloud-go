@@ -1,6 +1,7 @@
 # Kubernetes 部署清单
 
-本目录提供应用层生产基线和发布模板。完整的生产前置条件、迁移顺序、网关与上线检查见
+本目录提供可选 Kubernetes 模式的应用层生产基线和发布模板。少量固定服务可使用
+[Compose + nginx](../../docs/compose-deployment.md)。完整的生产前置条件、迁移顺序、网关与上线检查见
 [生产环境部署](../../docs/deployment.md)，故障处置见[生产运行手册](../../docs/operations.md)。
 
 ## 目录边界
@@ -11,7 +12,7 @@
 | `migrations/` | 三个服务的一次性 Job 模板 | 每次发布选择服务、替换 digest 后 create |
 | `overlays/staging/` | staging 可渲染示例 | 复制到环境仓库后定制 |
 | `overlays/production/` | production 可渲染示例 | 复制到环境仓库后定制 |
-| `overlays/production-k3s/` | 三节点 K3s production 入口 | 默认生产部署模式 |
+| `overlays/production-k3s/` | 三节点 K3s production 入口 | K3s 高可用部署模式 |
 | `overlays/production-mtls/` | production + Istio mTLS | 替代普通 production overlay |
 | `k3s/` | K3s server 配置、Envoy Gateway values 和建群说明 | 集群初始化与升级时使用 |
 | `gateway/` | Envoy Gateway 流量、安全和弹性策略 | 与应用 overlay 一起管理 |
@@ -43,12 +44,12 @@ make render-prod-k3s
 - API 域名、TLS Secret、GatewayClass、CORS origin；
 - OIDC issuer、JWKS 和服务间 token 地址；
 - 三个独立数据库 DSN；
-- Redis、RabbitMQ、S3、OTLP 地址和凭据；
+- Redis、RabbitMQ、OTLP 地址和凭据，以及 OSS 地域/Bucket/凭据；
 - requests/limits、HPA、限流、熔断、超时和告警接收方。
 
 `secret.example.yaml` 只列键名，不能直接应用。生产应由 External Secrets、Vault 或云 Secret
 Manager 创建 `eagle-runtime`。product 和 order 必须使用不同的 Client Credentials，不能复用
-Compose 中的 `eagle-worker`。
+开发 Compose 中的 `eagle-worker`。
 
 ## 发布顺序
 
@@ -66,8 +67,8 @@ PodTemplate 不可修改；失败的迁移必须修复后创建新 Job，不能�
 
 ## 网关
 
-生产入口使用 Gateway API + Envoy Gateway，不使用 Compose nginx。`base/gateway.yaml` 只创建
-`Gateway` 和 `HTTPRoute`。默认的 `production-k3s` overlay 额外创建 `GatewayClass/envoy` 和
+Kubernetes 模式的入口使用 Gateway API + Envoy Gateway。`base/gateway.yaml` 只创建
+`Gateway` 和 `HTTPRoute`。`production-k3s` overlay 额外创建 `GatewayClass/envoy` 和
 三副本 Envoy 数据面；控制器按 [K3s 生产说明](k3s/README.md) 用固定版本 Helm chart 安装。
 通用 `production` overlay 仍要求平台预先提供匹配的 GatewayClass。
 

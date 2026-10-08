@@ -43,10 +43,9 @@ message Upstream {
   google.protobuf.Duration authorization_max_staleness = 7;
 }
 
-// File configures the development/local blob adapter. The module keeps a
-// storage port so production deployments can replace it with S3 or OSS.
+// File selects the blob adapter owned by the file module.
 message File {
-  // local 只用于开发；s3 可连接 AWS S3、OSS、MinIO 等兼容服务。
+  // 默认 oss 使用阿里云原生 SDK；local 用于离线开发，s3 用于兼容存储。
   string provider = 3;
   string local_dir = 1;
   int64 max_size_bytes = 2;
@@ -59,6 +58,17 @@ message File {
     bool use_ssl = 6;
   }
   S3 s3 = 4;
+  message OSS {
+    string region = 1;
+    string bucket = 2;
+    // 留空时 SDK 按地域选择 HTTPS 公网 endpoint。
+    string endpoint = 3;
+    string access_key_id = 4;
+    string access_key_secret = 5;
+    // 使用 STS 临时凭据时同时提供 token。
+    string security_token = 6;
+  }
+  OSS oss = 5;
 }
 
 message Cache {

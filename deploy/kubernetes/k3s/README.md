@@ -1,8 +1,12 @@
 # 三节点 K3s 生产集群
 
-本目录定义 `eagle-go` 的默认生产运行平台：三台 Linux 服务器组成 K3s HA 集群，三个节点同时
+本目录定义 `eagle-go` 可选的 K3s 高可用平台：三台 Linux 服务器组成 K3s HA 集群，三个节点同时
 承担 control-plane、embedded etcd 和应用工作负载。应用清单位于
 `../overlays/production-k3s`；这里保存集群级配置和 Envoy Gateway Helm values。
+
+固定单机或双机的小规模部署优先使用 [Compose + nginx](../../../docs/compose-deployment.md)。
+本目录按三节点高可用配置，不应原样套用于单机/双机；尤其不能用两个 embedded etcd 成员
+声称可以容忍一个成员故障。选择 K3s 时采用本方案，或接入企业已有的 Kubernetes 平台。
 
 ## 目标拓扑
 
@@ -26,7 +30,7 @@ HAProxy/Keepalived VIP。不要只把 API 或业务域名指向某一台服务�
 - 节点间开放 K3s 所需的 `6443/tcp`、`2379-2380/tcp`、`8472/udp` 和 `10250/tcp`，这些端口
   只能在可信私网或安全组内开放；
 - 外部 LB 到三台节点开放 `80/tcp`、`443/tcp`；
-- 已准备镜像仓库、OIDC、三个 PostgreSQL database、Redis、RabbitMQ、S3 和 OTLP 地址；
+- 已准备镜像仓库、OIDC、三个 PostgreSQL database、Redis、RabbitMQ、阿里云 OSS 和 OTLP 地址；
 - 生产数据库和中间件不使用 K3s local-path 卷伪装高可用。
 
 ## 1. 初始化 K3s
@@ -35,17 +39,18 @@ HAProxy/Keepalived VIP。不要只把 API 或业务域名指向某一台服务�
 `K3S_API_ENDPOINT` 替换为控制面 LB 的固定域名或 VIP。在每台机器创建权限为 `0600` 的
 `/etc/rancher/k3s/token`，内容必须相同并由 Secret 管理系统生成，不要提交到仓库。
 
-在 server-1 初始化 embedded etcd。生产必须把 `K3S_VERSION` 替换为经过验证的固定版本，禁止
-直接跟随 latest：
+当前固定 K3s `v1.36.5+k3s1` 与 Envoy Gateway `v1.9.2`。截至 2026-10-04，K3s 最新稳定分支为 1.37，但 Envoy Gateway 1.9 官方仅声明支持 Kubernetes 1.33–1.36，因此使用支持范围内的最新补丁。升级前重新核对[兼容矩阵](https://gateway.envoyproxy.io/news/releases/matrix/)，禁止直接跟随 latest。
+
+在 server-1 初始化 embedded etcd：
 
 ```bash
-curl -sfL https://get.k3s.io | sudo env INSTALL_K3S_VERSION='K3S_VERSION' sh -s - server --cluster-init
+curl -sfL https://get.k3s.io | sudo env INSTALL_K3S_VERSION='v1.36.5+k3s1' sh -s - server --cluster-init
 ```
 
 控制面 LB 确认能访问 server-1 后，在 server-2 和 server-3 依次加入：
 
 ```bash
-curl -sfL https://get.k3s.io | sudo env INSTALL_K3S_VERSION='K3S_VERSION' sh -s - server --server https://K3S_API_ENDPOINT:6443
+curl -sfL https://get.k3s.io | sudo env INSTALL_K3S_VERSION='v1.36.5+k3s1' sh -s - server --server https://K3S_API_ENDPOINT:6443
 ```
 
 每加入一台都先确认节点和 etcd 健康，再继续下一台：
@@ -70,7 +75,7 @@ kubectl apply -f deploy/kubernetes/base/namespace.yaml
 
 ```bash
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v1.9.0 \
+  --version v1.9.2 \
   --namespace envoy-gateway-system \
   --create-namespace \
   --values deploy/kubernetes/k3s/envoy-gateway-values.yaml
@@ -92,7 +97,7 @@ values 将 Envoy 数据面部署到 `eagle` namespace，使已有 NetworkPolicy 
 - `api.example.com`、`app.example.com`；
 - 三个镜像为本次发布的不可变 digest；
 - OIDC issuer、JWKS、token URL；
-- Redis、S3、OTLP 地址和采样率；
+- Redis、OSS 地域/Bucket、OTLP 地址和采样率；
 - requests/limits、HPA、网关限流与熔断阈值。
 
 先渲染检查：

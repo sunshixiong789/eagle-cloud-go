@@ -20,7 +20,7 @@ spec:
           securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
           initContainers:
             - name: dump-and-verify
-              image: postgres:17-alpine
+              image: postgres:18.6-alpine
               command: ["/bin/sh", "-ec"]
               args: ["pg_dump --format=custom --file=/backup/database.dump \"$DATABASE_URL\" && pg_restore --list /backup/database.dump >/dev/null"]
               env:
@@ -31,7 +31,7 @@ spec:
               volumeMounts: [{name: backup, mountPath: /backup}]
           containers:
             - name: upload
-              image: amazon/aws-cli:2.27.41
+              image: amazon/aws-cli:2.37.9
               command: ["/bin/sh", "-ec"]
               args: ["aws --endpoint-url \"$S3_ENDPOINT\" s3 cp /backup/database.dump \"s3://$S3_BUCKET/$S3_PREFIX/admin/$(date -u +%Y/%m/%d)/admin-$(date -u +%Y%m%dT%H%M%SZ).dump\" --sse AES256"]
               envFrom: [{configMapRef: {name: eagle-backup}}]
@@ -67,7 +67,7 @@ spec:
           securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
           initContainers:
             - name: dump-and-verify
-              image: postgres:17-alpine
+              image: postgres:18.6-alpine
               command: ["/bin/sh", "-ec"]
               args: ["pg_dump --format=custom --file=/backup/database.dump \"$DATABASE_URL\" && pg_restore --list /backup/database.dump >/dev/null"]
               env:
@@ -78,7 +78,7 @@ spec:
               volumeMounts: [{name: backup, mountPath: /backup}]
           containers:
             - name: upload
-              image: amazon/aws-cli:2.27.41
+              image: amazon/aws-cli:2.37.9
               command: ["/bin/sh", "-ec"]
               args: ["aws --endpoint-url \"$S3_ENDPOINT\" s3 cp /backup/database.dump \"s3://$S3_BUCKET/$S3_PREFIX/product/$(date -u +%Y/%m/%d)/product-$(date -u +%Y%m%dT%H%M%SZ).dump\" --sse AES256"]
               envFrom: [{configMapRef: {name: eagle-backup}}]
@@ -114,7 +114,7 @@ spec:
           securityContext: {fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
           initContainers:
             - name: dump-and-verify
-              image: postgres:17-alpine
+              image: postgres:18.6-alpine
               command: ["/bin/sh", "-ec"]
               args: ["pg_dump --format=custom --file=/backup/database.dump \"$DATABASE_URL\" && pg_restore --list /backup/database.dump >/dev/null"]
               env:
@@ -125,7 +125,7 @@ spec:
               volumeMounts: [{name: backup, mountPath: /backup}]
           containers:
             - name: upload
-              image: amazon/aws-cli:2.27.41
+              image: amazon/aws-cli:2.37.9
               command: ["/bin/sh", "-ec"]
               args: ["aws --endpoint-url \"$S3_ENDPOINT\" s3 cp /backup/database.dump \"s3://$S3_BUCKET/$S3_PREFIX/order/$(date -u +%Y/%m/%d)/order-$(date -u +%Y%m%dT%H%M%SZ).dump\" --sse AES256"]
               envFrom: [{configMapRef: {name: eagle-backup}}]

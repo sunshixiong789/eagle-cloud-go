@@ -1,0 +1,41 @@
+# 只替换 EAGLE_API_HOST / EAGLE_CORS_ORIGIN，保留 nginx 的 $变量。
+map $http_origin $eagle_cors_origin {
+  default "";
+  "${EAGLE_CORS_ORIGIN}" $http_origin;
+}
+
+server {
+  listen 8080;
+  server_name localhost;
+  location = /edgez { access_log off; return 200 "ok\n"; }
+  location / { return 404; }
+}
+
+server {
+  listen 80;
+  server_name ${EAGLE_API_HOST};
+  return 301 https://${EAGLE_API_HOST}$request_uri;
+}
+
+server {
+  listen 443 ssl;
+  server_name ${EAGLE_API_HOST};
+  ssl_certificate /etc/nginx/tls/fullchain.pem;
+  ssl_certificate_key /etc/nginx/tls/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_cache shared:TLS:10m;
+  ssl_session_timeout 1d;
+
+  add_header Access-Control-Allow-Origin $eagle_cors_origin always;
+  add_header Vary Origin always;
+  add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
+  add_header Access-Control-Allow-Headers "Authorization, Content-Type, If-Match, X-Request-ID, Traceparent, Tracestate" always;
+  add_header Access-Control-Expose-Headers "X-Request-ID" always;
+  add_header Access-Control-Max-Age 600 always;
+  if ($request_method = OPTIONS) { return 204; }
+
+  limit_req zone=api_per_ip burst=40 nodelay;
+  limit_req_status 429;
+  location = /edgez { access_log off; return 200 "ok\n"; }
+  include /etc/nginx/routes.conf;
+}

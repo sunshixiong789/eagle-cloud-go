@@ -1,11 +1,11 @@
 module github.com/eagle-go/eagle/tests
 
-go 1.27.0
+go 1.27.1
 
 require (
 	github.com/fergusstrange/embedded-postgres v1.34.0
-	github.com/lib/pq v1.10.9
-	github.com/pressly/goose/v3 v3.27.3
+	github.com/lib/pq v1.12.3
+	github.com/pressly/goose/v3 v3.28.0
 )
 
 require (
@@ -13,5 +13,5 @@ require (
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
 )

@@ -6,7 +6,7 @@
 
 | 进程 | 拥有的模块 | 拥有的数据 | 依赖 |
 |---|---|---|---|
-| admin | access、dictionary、file、notification | 权限、字典、文件元数据、站内通知、事件 Inbox | Keycloak、S3、RabbitMQ |
+| admin | access、dictionary、file、notification | 权限、字典、文件元数据、站内通知、事件 Inbox | Keycloak、OSS、RabbitMQ |
 | product | product | 商品 | admin 策略快照、Redis 缓存 |
 | order | order | 订单、商品快照、事件 Outbox | product 查询、RabbitMQ |
 
@@ -108,24 +108,36 @@ DNS 解析，不嵌入注册中心 SDK。
                 └─ order
                      │
             PostgreSQL（每服务独立 database）
-              │ Redis / RabbitMQ / MinIO
+              │ Redis / RabbitMQ / OSS
               └──────── Keycloak
 
 docker compose -f deploy/docker-compose.yml up -d --build 会先执行每个服务的迁移任务，再启动服务和网关。OTel、Prometheus、Tempo、Grafana 通过 --profile obs 按需启动。
 
-生产默认使用三节点 K3s HA：
+生产按需选择两种模式：
+
+- Docker Compose + nginx：适合固定单机或双机，每台独立应用栈，Docker DNS 负责本机服务发现；
+- K3s + Envoy Gateway：需要集群调度与自动扩缩容时采用，Service/CoreDNS 负责服务发现。
+
+两种模式都使用当前三个独立服务镜像，数据依赖接入已有生产实例，服务间使用独立身份；
+不在 Go 中引入注册中心 SDK。单机不能容忍整机故障，双机 Compose 的入口需要外部 LB，
+且不具备跨节点自动调度；部署与发布细节见[部署总览](deployment.md)。
+
+K3s 高可用示例使用三个 server：
 
 - 三个 server 节点同时运行 control-plane、embedded etcd 和工作负载，容忍一个节点故障；
 - 外部 LB 访问三个节点的 Envoy Gateway；gRPC、metrics 和数据库保持集群内可达；
 - 每个服务独立 Deployment、Service、HPA 和 PodDisruptionBudget；
 - 迁移使用一次性 Job，成功后再滚动 Deployment；
 - 配置进 ConfigMap，DSN/凭据进 Secret；
-- file 多副本时把本地 BlobStore 替换为 S3/OSS/MinIO；
+- file 默认使用 OSS BlobStore；本地单实例开发可显式选择 local，S3 为可选适配；
 - NetworkPolicy 限制 order→product、资源服务→admin 和 Prometheus→metrics。
 
-生产入口为 `deploy/kubernetes/overlays/production-k3s`，复用 `base` 中的 Deployment、Service、Gateway API、
+Compose 生产入口为 `deploy/compose/compose.yml`，独立于开发清单，nginx 共用路径规则并动态解析
+容器地址；一次性迁移放在显式 `migration` profile，发布命令等待迁移完成再更新应用。
+
+K3s 生产入口为 `deploy/kubernetes/overlays/production-k3s`，复用 `base` 中的 Deployment、Service、Gateway API、
 HPA、PDB 与 NetworkPolicy。一次性迁移模板独立位于 `deploy/kubernetes/migrations`，
-由发布平台等待成功后再滚动 Deployment。Redis、RabbitMQ、PostgreSQL 和 S3 在生产环境
+由发布平台等待成功后再滚动 Deployment。Redis、RabbitMQ、PostgreSQL 和 OSS 在生产环境
 通过 Secret 接入托管实例，不在应用清单里伪装成单副本生产集群。具体发布顺序见
 [生产环境部署](deployment.md)。
 

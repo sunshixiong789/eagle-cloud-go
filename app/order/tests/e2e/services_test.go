@@ -101,8 +101,9 @@ func TestOrderEventAcrossServiceProcesses(t *testing.T) {
 			"EAGLE_SERVICE_AUTH_TOKEN_URL=" + identityServer.URL + "/realms/eagle/protocol/openid-connect/token",
 			"EAGLE_MESSAGING_RABBITMQ_URL=" + broker, "EAGLE_MESSAGING_EXCHANGE=" + exchange, "EAGLE_MESSAGING_ORDER_CREATED_QUEUE=" + queue,
 			"EAGLE_CACHE_REDIS_ENABLED=false", "EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT=" + services["admin"].grpc, "EAGLE_UPSTREAM_PRODUCT_ENDPOINT=" + services["product"].grpc,
-			// S3 is deliberately unreachable: policy and notification startup must work.
-			"EAGLE_FILE_PROVIDER=s3", "EAGLE_FILE_S3_ENDPOINT=127.0.0.1:1", "EAGLE_FILE_S3_REGION=us-east-1",
+			// OSS is deliberately unreachable: policy and notification startup must work.
+			"EAGLE_FILE_PROVIDER=oss", "EAGLE_FILE_OSS_ENDPOINT=http://127.0.0.1:1", "EAGLE_FILE_OSS_REGION=cn-hangzhou",
+			"EAGLE_FILE_OSS_BUCKET=e2e-files", "EAGLE_FILE_OSS_ACCESS_KEY_ID=test-id", "EAGLE_FILE_OSS_ACCESS_KEY_SECRET=test-secret",
 		}
 		switch name {
 		case "admin":

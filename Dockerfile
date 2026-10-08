@@ -1,5 +1,5 @@
 # 一个 Dockerfile 是构建模板；SERVICE 决定本次只编译并打包哪个服务。
-FROM golang:1.27-alpine AS builder
+FROM golang:1.27.1-alpine AS builder
 
 ARG GOPROXY=https://goproxy.cn,direct
 ARG VERSION=dev
@@ -21,11 +21,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       ./app/${SERVICE}/cmd/${SERVICE} && \
     go build -trimpath -ldflags "-w -s" -o /out/migrate ./tools/migrate && \
     go build -trimpath -ldflags "-w -s" -o /out/healthcheck ./tools/healthcheck && \
-    mkdir -p /out/migrations && \
+    mkdir -p /out/migrations /out/uploads && \
     cp -R "app/${SERVICE}/migrations/." /out/migrations/ && \
     cp -R "app/${SERVICE}/configs" /out/configs
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 
 ARG SERVICE
 ARG VERSION
@@ -37,6 +37,8 @@ COPY --from=builder /out/migrate /app/migrate
 COPY --from=builder /out/healthcheck /app/healthcheck
 COPY --from=builder /out/migrations /app/migrations
 COPY --from=builder /out/configs /app/configs
+# 新建 uploads 卷会继承目录属主，使本地模式也能以 nonroot 写文件。
+COPY --from=builder --chown=65532:65532 /out/uploads /data/uploads
 
 WORKDIR /app
 

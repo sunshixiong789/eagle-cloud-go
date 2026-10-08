@@ -102,8 +102,14 @@ func Validate(b *Bootstrap, requirements ...Requirements) error {
 				strings.TrimSpace(s3.GetAccessKey()) == "" || strings.TrimSpace(s3.GetSecretKey()) == "" {
 				errs = append(errs, errors.New("file.s3 endpoint, bucket, access_key and secret_key are required"))
 			}
+		case "oss":
+			oss := file.GetOss()
+			if strings.TrimSpace(oss.GetRegion()) == "" || strings.TrimSpace(oss.GetBucket()) == "" ||
+				strings.TrimSpace(oss.GetAccessKeyId()) == "" || strings.TrimSpace(oss.GetAccessKeySecret()) == "" {
+				errs = append(errs, errors.New("file.oss region, bucket, access_key_id and access_key_secret are required"))
+			}
 		default:
-			errs = append(errs, errors.New("file.provider must be local or s3"))
+			errs = append(errs, errors.New("file.provider must be oss, local or s3"))
 		}
 	}
 	if required.AuthorizationUpstream && strings.TrimSpace(upstream.GetAuthorizationEndpoint()) == "" {

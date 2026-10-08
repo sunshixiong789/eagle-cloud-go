@@ -1,0 +1,150 @@
+# 独立的生产清单；不要与开发 docker-compose.yml 合并。
+name: ${EAGLE_COMPOSE_PROJECT:-eagle-production}
+
+x-runtime: &runtime
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 30s
+  cpus: "1.0"
+  mem_limit: 512m
+  logging:
+    driver: local
+    options: {max-size: "10m", max-file: "5"}
+
+x-environment: &environment
+  EAGLE_SERVER_HTTP_ADDR: 0.0.0.0:8000
+  EAGLE_SERVER_GRPC_ADDR: 0.0.0.0:9000
+  EAGLE_OBSERVABILITY_METRICS_ADDR: 0.0.0.0:9100
+  EAGLE_AUTH_ISSUER: ${EAGLE_AUTH_ISSUER:?set production OIDC issuer}
+  EAGLE_AUTH_JWKS_URL: ${EAGLE_AUTH_JWKS_URL:-}
+  EAGLE_OBSERVABILITY_OTLP_ENDPOINT: ${EAGLE_OBSERVABILITY_OTLP_ENDPOINT:-}
+  EAGLE_OBSERVABILITY_OTLP_INSECURE: ${EAGLE_OBSERVABILITY_OTLP_INSECURE:-false}
+  EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO: ${EAGLE_OBSERVABILITY_TRACE_SAMPLE_RATIO:-0.02}
+  EAGLE_OBSERVABILITY_LOG_LEVEL: ${EAGLE_OBSERVABILITY_LOG_LEVEL:-info}
+
+x-migration: &migration
+  profiles: [migration]
+  entrypoint: [/app/migrate]
+  command: [-dir, /app/migrations]
+  restart: "no"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  healthcheck: {disable: true}
+  cpus: "0.5"
+  mem_limit: 256m
+
+services:
+  admin-migrate:
+    <<: *migration
+    image: ${EAGLE_ADMIN_IMAGE:?set admin image digest}
+    environment:
+      EAGLE_DATABASE_DSN: ${EAGLE_ADMIN_MIGRATION_DSN:?set admin migration DSN}
+
+  product-migrate:
+    <<: *migration
+    image: ${EAGLE_PRODUCT_IMAGE:?set product image digest}
+    environment:
+      EAGLE_DATABASE_DSN: ${EAGLE_PRODUCT_MIGRATION_DSN:?set product migration DSN}
+
+  order-migrate:
+    <<: *migration
+    image: ${EAGLE_ORDER_IMAGE:?set order image digest}
+    environment:
+      EAGLE_DATABASE_DSN: ${EAGLE_ORDER_MIGRATION_DSN:?set order migration DSN}
+
+  admin:
+    <<: *runtime
+    image: ${EAGLE_ADMIN_IMAGE:?set admin image digest}
+    environment:
+      <<: *environment
+      EAGLE_DATABASE_DSN: ${EAGLE_ADMIN_DSN:?set admin runtime DSN}
+      EAGLE_AUTH_CLIENT_ID: eagle-admin
+      EAGLE_AUTH_AUDIENCE: eagle-admin
+      EAGLE_AUTH_INTERNAL_CLIENT_ID: ${EAGLE_PRODUCT_SERVICE_CLIENT_ID:-eagle-product-worker}
+      EAGLE_MESSAGING_RABBITMQ_URL: ${EAGLE_MESSAGING_RABBITMQ_URL:?set production RabbitMQ URL}
+      EAGLE_FILE_PROVIDER: oss
+      EAGLE_FILE_OSS_REGION: ${EAGLE_FILE_OSS_REGION:?set OSS region}
+      EAGLE_FILE_OSS_BUCKET: ${EAGLE_FILE_OSS_BUCKET:?set OSS bucket}
+      EAGLE_FILE_OSS_ENDPOINT: ${EAGLE_FILE_OSS_ENDPOINT:-}
+      EAGLE_FILE_OSS_ACCESS_KEY_ID: ${EAGLE_FILE_OSS_ACCESS_KEY_ID:?set OSS access key id}
+      EAGLE_FILE_OSS_ACCESS_KEY_SECRET: ${EAGLE_FILE_OSS_ACCESS_KEY_SECRET:?set OSS access key secret}
+      EAGLE_FILE_OSS_SECURITY_TOKEN: ${EAGLE_FILE_OSS_SECURITY_TOKEN:-}
+
+  product:
+    <<: *runtime
+    image: ${EAGLE_PRODUCT_IMAGE:?set product image digest}
+    environment:
+      <<: *environment
+      EAGLE_DATABASE_DSN: ${EAGLE_PRODUCT_DSN:?set product runtime DSN}
+      EAGLE_AUTH_CLIENT_ID: eagle-product
+      EAGLE_AUTH_AUDIENCE: eagle-product
+      EAGLE_AUTH_INTERNAL_CLIENT_ID: ${EAGLE_ORDER_SERVICE_CLIENT_ID:-eagle-order-worker}
+      EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: dns:///admin:9000
+      EAGLE_SERVICE_AUTH_TOKEN_URL: ${EAGLE_SERVICE_AUTH_TOKEN_URL:?set service token URL}
+      EAGLE_SERVICE_AUTH_CLIENT_ID: ${EAGLE_PRODUCT_SERVICE_CLIENT_ID:-eagle-product-worker}
+      EAGLE_SERVICE_AUTH_CLIENT_SECRET: ${EAGLE_PRODUCT_SERVICE_CLIENT_SECRET:?set product service secret}
+      EAGLE_CACHE_REDIS_ADDRESS: ${EAGLE_CACHE_REDIS_ADDRESS:?set production Redis address}
+      EAGLE_CACHE_REDIS_USERNAME: ${EAGLE_CACHE_REDIS_USERNAME:-}
+      EAGLE_CACHE_REDIS_PASSWORD: ${EAGLE_CACHE_REDIS_PASSWORD:?set production Redis password}
+      EAGLE_CACHE_REDIS_TLS_ENABLED: "true"
+      EAGLE_CACHE_REDIS_TLS_SERVER_NAME: ${EAGLE_CACHE_REDIS_TLS_SERVER_NAME:-}
+    depends_on:
+      admin: {condition: service_healthy}
+
+  order:
+    <<: *runtime
+    image: ${EAGLE_ORDER_IMAGE:?set order image digest}
+    environment:
+      <<: *environment
+      EAGLE_DATABASE_DSN: ${EAGLE_ORDER_DSN:?set order runtime DSN}
+      EAGLE_AUTH_CLIENT_ID: eagle-order
+      EAGLE_AUTH_AUDIENCE: eagle-order
+      EAGLE_AUTH_INTERNAL_CLIENT_ID: ${EAGLE_ORDER_SERVICE_CLIENT_ID:-eagle-order-worker}
+      EAGLE_UPSTREAM_PRODUCT_ENDPOINT: dns:///product:9000
+      EAGLE_SERVICE_AUTH_TOKEN_URL: ${EAGLE_SERVICE_AUTH_TOKEN_URL:?set service token URL}
+      EAGLE_SERVICE_AUTH_CLIENT_ID: ${EAGLE_ORDER_SERVICE_CLIENT_ID:-eagle-order-worker}
+      EAGLE_SERVICE_AUTH_CLIENT_SECRET: ${EAGLE_ORDER_SERVICE_CLIENT_SECRET:?set order service secret}
+      EAGLE_MESSAGING_RABBITMQ_URL: ${EAGLE_MESSAGING_RABBITMQ_URL:?set production RabbitMQ URL}
+    depends_on:
+      product: {condition: service_healthy}
+
+  gateway:
+    <<: *runtime
+    image: nginx:1.30.5-alpine
+    # nginx master 绑定端口并启动非 root worker 所需的最小能力。
+    cap_add: [NET_BIND_SERVICE, SETUID, SETGID, CHOWN]
+    environment:
+      EAGLE_API_HOST: ${EAGLE_API_HOST:?set API hostname without scheme}
+      EAGLE_CORS_ORIGIN: ${EAGLE_CORS_ORIGIN:?set browser origin}
+      NGINX_ENVSUBST_FILTER: ^EAGLE_(API_HOST|CORS_ORIGIN)$$
+    ports:
+      - "${EAGLE_BIND_ADDRESS:-0.0.0.0}:${EAGLE_HTTP_PORT:-80}:80"
+      - "${EAGLE_BIND_ADDRESS:-0.0.0.0}:${EAGLE_HTTPS_PORT:-443}:443"
+    volumes:
+      - ../gateway/nginx.production.conf:/etc/nginx/nginx.conf:ro
+      - ../gateway/https.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../gateway/upstreams.conf:/etc/nginx/upstreams.conf:ro
+      - ../gateway/routes.conf:/etc/nginx/routes.conf:ro
+      - ../gateway/proxy.conf:/etc/nginx/proxy.conf:ro
+      - type: bind
+        source: ${EAGLE_TLS_DIR:?set absolute TLS directory}
+        target: /etc/nginx/tls
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs:
+      - /etc/nginx/conf.d
+      - /var/cache/nginx
+      - /var/run
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/edgez]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      admin: {condition: service_healthy}
+      product: {condition: service_healthy}
+      order: {condition: service_healthy}

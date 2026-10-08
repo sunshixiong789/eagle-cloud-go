@@ -7,8 +7,8 @@ x-service-environment: &service-environment
   EAGLE_OBSERVABILITY_OTLP_ENDPOINT: otel-collector:4317
   EAGLE_AUTH_ISSUER: http://127.0.0.1:8080/realms/eagle
   EAGLE_AUTH_JWKS_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/certs
-  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: admin:9000
-  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: product:9000
+  EAGLE_UPSTREAM_AUTHORIZATION_ENDPOINT: dns:///admin:9000
+  EAGLE_UPSTREAM_PRODUCT_ENDPOINT: dns:///product:9000
   EAGLE_SERVICE_AUTH_TOKEN_URL: http://keycloak:8080/realms/eagle/protocol/openid-connect/token
   EAGLE_SERVICE_AUTH_CLIENT_ID: eagle-worker
   EAGLE_SERVICE_AUTH_CLIENT_SECRET: dev-only-worker-secret
@@ -16,7 +16,7 @@ x-service-environment: &service-environment
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18.6-alpine
     environment:
       POSTGRES_USER: eagle
       POSTGRES_PASSWORD: eagle
@@ -24,7 +24,7 @@ services:
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     ports: ["5432:5432"]
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata18:/var/lib/postgresql
       - ./postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U eagle -d eagle"]
@@ -33,7 +33,7 @@ services:
       retries: 10
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.8.0
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -53,7 +53,7 @@ services:
         condition: service_healthy
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:8.10.2-alpine
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "eagle"]
     ports: ["6379:6379"]
     volumes: [redisdata:/data]
@@ -64,7 +64,7 @@ services:
       retries: 10
 
   rabbitmq:
-    image: rabbitmq:4.1-management-alpine
+    image: rabbitmq:4.3.6-management-alpine
     environment:
       RABBITMQ_DEFAULT_USER: eagle
       RABBITMQ_DEFAULT_PASS: eagle
@@ -75,31 +75,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
-
-  minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: eagle
-      MINIO_ROOT_PASSWORD: eagle-local-secret
-      MINIO_PROMETHEUS_AUTH_TYPE: public
-    ports: ["9004:9000", "9005:9001"]
-    volumes: [miniodata:/data]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-
-  minio-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        mc alias set local http://minio:9000 eagle eagle-local-secret &&
-        mc mb --ignore-existing local/eagle-files
-    depends_on:
-      minio: {condition: service_healthy}
 
   admin-migrate:
     image: eagle/admin:dev
@@ -147,18 +122,20 @@ services:
       EAGLE_DATABASE_DSN: postgres://eagle:eagle@postgres:5432/eagle_admin?sslmode=disable
       EAGLE_AUTH_CLIENT_ID: eagle-admin
       EAGLE_AUTH_AUDIENCE: eagle-admin
+      EAGLE_FILE_PROVIDER: ${EAGLE_FILE_PROVIDER:-oss}
+      EAGLE_FILE_OSS_REGION: ${EAGLE_FILE_OSS_REGION:-}
+      EAGLE_FILE_OSS_BUCKET: ${EAGLE_FILE_OSS_BUCKET:-}
+      EAGLE_FILE_OSS_ENDPOINT: ${EAGLE_FILE_OSS_ENDPOINT:-}
+      EAGLE_FILE_OSS_ACCESS_KEY_ID: ${EAGLE_FILE_OSS_ACCESS_KEY_ID:-}
+      EAGLE_FILE_OSS_ACCESS_KEY_SECRET: ${EAGLE_FILE_OSS_ACCESS_KEY_SECRET:-}
+      EAGLE_FILE_OSS_SECURITY_TOKEN: ${EAGLE_FILE_OSS_SECURITY_TOKEN:-}
       EAGLE_FILE_LOCAL_DIR: /data/uploads
-      EAGLE_FILE_PROVIDER: s3
-      EAGLE_FILE_S3_ENDPOINT: minio:9000
-      EAGLE_FILE_S3_BUCKET: eagle-files
-      EAGLE_FILE_S3_ACCESS_KEY: eagle
-      EAGLE_FILE_S3_SECRET_KEY: eagle-local-secret
+    volumes: [uploads:/data/uploads]
     ports: ["8001:8000", "9001:9000", "9101:9100"]
     depends_on:
       admin-migrate: {condition: service_completed_successfully}
       keycloak: {condition: service_started}
       rabbitmq: {condition: service_healthy}
-      minio-init: {condition: service_completed_successfully}
 
   product:
     image: eagle/product:dev
@@ -189,18 +166,20 @@ services:
       rabbitmq: {condition: service_healthy}
 
   gateway:
-    image: nginx:1.27-alpine
+    image: nginx:1.30.5-alpine
     ports: ["8000:8000"]
     volumes:
       - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./gateway/proxy.conf:/etc/nginx/proxy.conf:ro
+      - ./gateway/upstreams.conf:/etc/nginx/upstreams.conf:ro
+      - ./gateway/routes.conf:/etc/nginx/routes.conf:ro
     depends_on:
       admin: {condition: service_healthy}
       product: {condition: service_healthy}
       order: {condition: service_healthy}
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.121.0
+    image: otel/opentelemetry-collector-contrib:${EAGLE_OTEL_IMAGE_TAG:-0.161.0}
     profiles: ["obs"]
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
@@ -209,7 +188,7 @@ services:
     depends_on: [tempo]
 
   tempo:
-    image: grafana/tempo:2.7.2
+    image: grafana/tempo:3.1.0
     profiles: ["obs"]
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
@@ -217,7 +196,7 @@ services:
     ports: ["3200:3200"]
 
   prometheus:
-    image: prom/prometheus:v3.2.1
+    image: prom/prometheus:v3.15.0
     profiles: ["obs"]
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -227,7 +206,7 @@ services:
     depends_on: [alertmanager, redis-exporter]
 
   alertmanager:
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:v0.34.1
     profiles: ["obs"]
     command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
     volumes:
@@ -235,7 +214,7 @@ services:
     ports: ["9093:9093"]
 
   loki:
-    image: grafana/loki:3.5.0
+    image: grafana/loki:3.7.8
     profiles: ["obs"]
     command: ["-config.file=/etc/loki/loki.yaml"]
     volumes:
@@ -244,7 +223,7 @@ services:
     ports: ["3100:3100"]
 
   alloy:
-    image: grafana/alloy:v1.9.2
+    image: grafana/alloy:v1.20.1
     profiles: ["obs"]
     command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
     volumes:
@@ -254,7 +233,7 @@ services:
     depends_on: [loki]
 
   redis-exporter:
-    image: oliver006/redis_exporter:v1.72.1
+    image: oliver006/redis_exporter:v1.93.0
     profiles: ["obs"]
     environment:
       REDIS_ADDR: redis://redis:6379
@@ -264,7 +243,7 @@ services:
       redis: {condition: service_healthy}
 
   grafana:
-    image: grafana/grafana:11.6.0
+    image: grafana/grafana:13.2.3
     profiles: ["obs"]
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
@@ -278,10 +257,10 @@ services:
     depends_on: [prometheus, tempo, loki]
 
 volumes:
-  pgdata:
+  pgdata18:
   redisdata:
   rabbitdata:
-  miniodata:
+  uploads:
   prometheusdata:
   lokidata:
   alloydata:
