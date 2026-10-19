@@ -8,7 +8,7 @@ require (
 	github.com/eagle-go/eagle/pkg v0.0.0
 	github.com/eagle-go/eagle/tests v0.0.0
 	github.com/go-kratos/kratos/v3 v3.0.0
-	github.com/redis/rueidis v1.0.78
+	github.com/redis/rueidis v1.0.79
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )
