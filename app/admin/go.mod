@@ -8,7 +8,7 @@ require (
 	github.com/eagle-go/eagle/api v0.0.0
 	github.com/eagle-go/eagle/pkg v0.0.0
 	github.com/eagle-go/eagle/tests v0.0.0
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/go-kratos/kratos/v3 v3.0.0
 	github.com/minio/minio-go/v7 v7.3.0
 	go.opentelemetry.io/otel v1.47.0
