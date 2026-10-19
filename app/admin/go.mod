@@ -4,7 +4,7 @@ go 1.27.1
 
 require (
 	entgo.io/ent v0.14.6
-	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.6.0
+	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.6.1
 	github.com/eagle-go/eagle/api v0.0.0
 	github.com/eagle-go/eagle/pkg v0.0.0
 	github.com/eagle-go/eagle/tests v0.0.0
